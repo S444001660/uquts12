@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+
 // استيرادات Firebase الضرورية
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -89,7 +90,8 @@ class MyApp extends StatelessWidget {
       // استخدام `copyWith` لتخصيص الثيم الأساسي دون تغييره بالكامل.
       theme: baseTheme.copyWith(
         // استخدام خط "Cairo" من Google Fonts لجميع النصوص في التطبيق.
-        textTheme: GoogleFonts.cairoTextTheme(baseTheme.textTheme),
+        textTheme: GoogleFonts.notoKufiArabicTextTheme(baseTheme.textTheme).apply(
+         fontFamilyFallback: ['Roboto', 'Arial'],),
         // تخصيص المظهر الموحد لجميع أشرطة العناوين (AppBar).
         appBarTheme: AppBarTheme(
           centerTitle: true, // توسيط العنوان.

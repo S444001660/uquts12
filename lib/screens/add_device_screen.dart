@@ -633,16 +633,25 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                                   ]),
                                 const SizedBox(height: 16),
                               ],
-                              TextFormField(
-                                controller: _nameController,
+                              DropdownButtonFormField<String>(
                                 decoration: InputDecoration(
-                                    labelText: 'اسم الجهاز',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
+                                  labelText: 'المعالج',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                value: _processorController.text.isNotEmpty
+                                    ? _processorController.text
+                                    : null,
+                                items: DeviceFormConstants.processors
+                                    .map((item) => DropdownMenuItem(
+                                        value: item, child: Text(item)))
+                                    .toList(),
+                                onChanged: (value) =>
+                                    _processorController.text = value ?? '',
                                 validator: (value) {
                                   if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateName(value);
+                                  return ValidationUtils.validateDropdown(value,
+                                      errorMessage: 'المعالج مطلوب');
                                 },
                               ),
                               const SizedBox(height: 16),
@@ -682,59 +691,69 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                                 },
                               ),
                               const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _processorController,
+                              DropdownButtonFormField<String>(
                                 decoration: InputDecoration(
-                                    labelText: 'المعالج',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
+                                  labelText: 'نوع التخزين',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                value: _storageTypeController.text.isNotEmpty
+                                    ? _storageTypeController.text
+                                    : null,
+                                items: DeviceFormConstants.storageTypes
+                                    .map((item) => DropdownMenuItem(
+                                        value: item, child: Text(item)))
+                                    .toList(),
+                                onChanged: (value) =>
+                                    _storageTypeController.text = value ?? '',
                                 validator: (value) {
                                   if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateRequired(
-                                      value, 'المعالج مطلوب');
+                                  return ValidationUtils.validateDropdown(value,
+                                      errorMessage: 'نوع التخزين مطلوب');
                                 },
                               ),
                               const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _storageTypeController,
+                              DropdownButtonFormField<String>(
                                 decoration: InputDecoration(
-                                    labelText: 'نوع التخزين',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
+                                  labelText: 'حجم التخزين',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                value: _storageSizeController.text.isNotEmpty
+                                    ? _storageSizeController.text
+                                    : null,
+                                items: DeviceFormConstants.storageSizes
+                                    .map((item) => DropdownMenuItem(
+                                        value: item, child: Text(item)))
+                                    .toList(),
+                                onChanged: (value) =>
+                                    _storageSizeController.text = value ?? '',
                                 validator: (value) {
                                   if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateRequired(
-                                      value, 'نوع التخزين مطلوب');
+                                  return ValidationUtils.validateDropdown(value,
+                                      errorMessage: 'حجم التخزين مطلوب');
                                 },
                               ),
                               const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _storageSizeController,
+                              DropdownButtonFormField<String>(
                                 decoration: InputDecoration(
-                                    labelText: 'حجم التخزين',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
+                                  labelText: 'نظام التشغيل',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                value: _osVersionController.text.isNotEmpty
+                                    ? _osVersionController.text
+                                    : null,
+                                items: DeviceFormConstants.osVersions
+                                    .map((item) => DropdownMenuItem(
+                                        value: item, child: Text(item)))
+                                    .toList(),
+                                onChanged: (value) =>
+                                    _osVersionController.text = value ?? '',
                                 validator: (value) {
                                   if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateRequired(
-                                      value, 'حجم التخزين مطلوب');
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _osVersionController,
-                                decoration: InputDecoration(
-                                    labelText: 'نظام التشغيل',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
-                                validator: (value) {
-                                  if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateRequired(
-                                      value, 'نظام التشغيل مطلوب');
+                                  return ValidationUtils.validateDropdown(value,
+                                      errorMessage: 'نظام التشغيل مطلوب');
                                 },
                               ),
                               const SizedBox(height: 16),
@@ -747,37 +766,59 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                               ),
                               if (_hasExtraStorage) ...[
                                 const SizedBox(height: 16),
-                                TextFormField(
-                                  controller: _extraStorageTypeController,
+                                DropdownButtonFormField<String>(
                                   decoration: InputDecoration(
-                                      labelText: 'نوع التخزين الإضافي',
-                                      border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12))),
+                                    labelText: 'نوع التخزين الإضافي',
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                  ),
+                                  value: _extraStorageTypeController
+                                          .text.isNotEmpty
+                                      ? _extraStorageTypeController.text
+                                      : null,
+                                  items: DeviceFormConstants.storageTypes
+                                      .map((item) => DropdownMenuItem(
+                                          value: item, child: Text(item)))
+                                      .toList(),
+                                  onChanged: (value) =>
+                                      _extraStorageTypeController.text =
+                                          value ?? '',
                                   validator: (value) {
-                                    if (_needsMaintenance) return null;
-                                    if (_hasExtraStorage) {
-                                      return ValidationUtils.validateRequired(
-                                          value, 'نوع التخزين الإضافي مطلوب');
-                                    }
-                                    return null;
+                                    if (_needsMaintenance || !_hasExtraStorage)
+                                      return null;
+                                    return ValidationUtils.validateDropdown(
+                                        value,
+                                        errorMessage:
+                                            'نوع التخزين الإضافي مطلوب');
                                   },
                                 ),
                                 const SizedBox(height: 16),
-                                TextFormField(
-                                  controller: _extraStorageSizeController,
+                                DropdownButtonFormField<String>(
                                   decoration: InputDecoration(
-                                      labelText: 'حجم التخزين الإضافي',
-                                      border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12))),
+                                    labelText: 'حجم التخزين الإضافي',
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                  ),
+                                  value: _extraStorageSizeController
+                                          .text.isNotEmpty
+                                      ? _extraStorageSizeController.text
+                                      : null,
+                                  items: DeviceFormConstants.storageSizes
+                                      .map((item) => DropdownMenuItem(
+                                          value: item, child: Text(item)))
+                                      .toList(),
+                                  onChanged: (value) =>
+                                      _extraStorageSizeController.text =
+                                          value ?? '',
                                   validator: (value) {
-                                    if (_needsMaintenance) return null;
-                                    if (_hasExtraStorage) {
-                                      return ValidationUtils.validateRequired(
-                                          value, 'حجم التخزين الإضافي مطلوب');
-                                    }
-                                    return null;
+                                    if (_needsMaintenance || !_hasExtraStorage)
+                                      return null;
+                                    return ValidationUtils.validateDropdown(
+                                        value,
+                                        errorMessage:
+                                            'حجم التخزين الإضافي مطلوب');
                                   },
                                 ),
                                 const SizedBox(height: 16),

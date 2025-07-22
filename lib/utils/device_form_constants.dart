@@ -7,6 +7,7 @@ class DeviceFormConstants {
     'كلية الحاسب الآلي',
     'كلية العلوم',
     'كلية الإدارة والاقتصاد',
+    'اخرى',
   ];
 
   static final List<String> models = [
@@ -15,6 +16,7 @@ class DeviceFormConstants {
     'HP Z2 Mini G4 Workstation',
     'HP Elite Mini 800 G9 Desktop PC',
     'HP EliteOne 800 G3 All-in-One PC',
+    'اخرى',
   ];
 
   static final List<String> processors = [
@@ -23,9 +25,10 @@ class DeviceFormConstants {
     'Core i5',
     'Core i7',
     'Core i9',
+    'اخرى',
   ];
 
-  static final List<String> storageTypes = ['SSD', 'HDD', 'NVME'];
+  static final List<String> storageTypes = ['SSD', 'HDD', 'NVME','اخرى',];
 
   static final List<String> storageSizes = [
     '128 GB',
@@ -33,6 +36,7 @@ class DeviceFormConstants {
     '512 GB',
     '1 TB',
     '2 TB',
+    'اخرى',
   ];
 
   static final List<String> osVersions = [
@@ -41,6 +45,7 @@ class DeviceFormConstants {
     'Windows 11',
     'macOS',
     'Linux',
+    'اخرى',
   ];
 
   static final Map<String, List<String>> departments = {
@@ -48,31 +53,42 @@ class DeviceFormConstants {
       'قسم الهندسة الكهربائية',
       'قسم الهندسة المدنية',
       'قسم الهندسة الميكانيكية',
-      'قسم هندسة الحاسب',
       'قسم الهندسة الصناعية',
+      'اخرى',
     ],
     'كلية الطب': [
       'قسم الطب البشري',
       'قسم طب الأسنان',
       'قسم العلوم الطبية التطبيقية',
+      'اخرى',
     ],
     'كلية الحاسب الآلي': [
       'قسم علوم الحاسب',
-      'قسم نظم المعلومات',
-      'قسم تقنية المعلومات',
+      'قسم هندسة الحاسب والشبكات',
+      'قسم علم البيانات',
+      'قسم الذكاء الاصطناعي',
+      'قسم هندسة البرمجيات',
+      'قسم الامن السبراني',
+      'اخرى',
     ],
     'كلية العلوم': [
       'قسم الرياضيات',
       'قسم الفيزياء',
       'قسم الكيمياء',
       'قسم الأحياء',
+      'اخرى',
     ],
     'كلية الإدارة والاقتصاد': [
       'قسم إدارة الأعمال',
       'قسم المحاسبة',
       'قسم الاقتصاد',
       'قسم التسويق',
+      'اخرى',
     ],
+
+    'اخرى':[
+      'اخرى',
+    ]
   };
 
   static final List<String> floors = [

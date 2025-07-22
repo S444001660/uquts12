@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/task_model.dart';
+import 'task_details_screen.dart';
 
 class UserTasksScreen extends StatefulWidget {
   const UserTasksScreen({super.key});
@@ -57,55 +58,43 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
           .doc(userTask.taskId)
           .get(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Card(
-              child: ListTile(title: Text('جاري تحميل تفاصيل المهمة...')));
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 80,
+            child: Center(child: CircularProgressIndicator()),
+          );
         }
-        final mainTask =
-            TaskModel.fromMap(snapshot.data!.data() as Map<String, dynamic>);
-        final progress =
-            (mainTask.targetCount != null && mainTask.targetCount! > 0)
-                ? (userTask.progress / mainTask.targetCount!)
-                : (userTask.isCompleted ? 1.0 : 0.0);
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          elevation: 4,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(mainTask.typeDisplayName,
-                    style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                if (mainTask.college != null)
-                  Text('الكلية: ${mainTask.college}'),
-                if (mainTask.notes.isNotEmpty)
-                  Text('ملاحظات: ${mainTask.notes}'),
-                const SizedBox(height: 16),
-                if (mainTask.targetCount != null)
-                  Text(
-                      'التقدم: ${userTask.progress} / ${mainTask.targetCount}'),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 10,
-                  borderRadius: BorderRadius.circular(5),
+        if (!snapshot.hasData || snapshot.data!.data() == null) {
+          return const SizedBox(
+            height: 80,
+            child: Center(child: Text('تعذر تحميل بيانات المهمة')),
+          );
+        }
+
+        final taskData = snapshot.data!.data() as Map<String, dynamic>;
+        final task = TaskModel.fromMap(taskData);
+
+        return InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => TaskDetailsScreen(
+                  taskId: userTask.taskId,
+                  userTaskId: userTask.id,
                 ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    userTask.isCompleted ? 'اكتملت' : 'قيد التنفيذ',
-                    style: TextStyle(
-                      color:
-                          userTask.isCompleted ? Colors.green : Colors.orange,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+              ),
+            );
+          },
+          child: Card(
+            child: ListTile(
+              title: Text(task.typeDisplayName),
+              subtitle: Text(task.notes),
+              trailing: Icon(
+                userTask.isCompleted ? Icons.check : Icons.pending,
+                color: userTask.isCompleted ? Colors.green : Colors.grey,
+              ),
             ),
           ),
         );

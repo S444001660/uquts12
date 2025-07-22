@@ -19,6 +19,7 @@ import 'admin/reports_screen.dart';
 import 'add_task.dart';
 import 'user_tasks_screen.dart';
 import '../services/firebase_database_service.dart';
+import 'task_details_screen.dart';
 
 class UpdatedHomeScreen extends StatefulWidget {
   const UpdatedHomeScreen({super.key});
@@ -490,48 +491,89 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
                 .clamp(0, 100)
             : (userTask['isCompleted'] ? 100.0 : 0.0);
 
-        return ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: CircleAvatar(
-            backgroundColor: userTask['isCompleted']
-                ? Colors.green
-                : theme.colorScheme.primary,
-            child: Icon(
-              userTask['isCompleted'] ? Icons.check : Icons.assignment,
-              color: Colors.white,
-            ),
-          ),
-          title: Text(
-            mainTask['typeDisplayName'],
-            style: theme.textTheme.titleMedium,
-            textAlign: TextAlign.right,
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (mainTask['college'] != null)
-                Text('الكلية: ${mainTask['college']}'),
-              if (mainTask['targetCount'] != null)
-                Text(
-                    'التقدم: ${userTask['progress']}/${mainTask['targetCount']}'),
-              LinearProgressIndicator(
-                value: progress / 100,
-                backgroundColor: Colors.grey[300],
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  userTask['isCompleted']
-                      ? Colors.green
-                      : theme.colorScheme.primary,
+        final String title = mainTask['typeDisplayName'] ?? 'مهمة';
+        final String? college = mainTask['college'];
+        final String? target = mainTask['targetCount'] != null
+            ? '${userTask['progress']}/${mainTask['targetCount']}'
+            : null;
+
+        return InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => TaskDetailsScreen(
+                  taskId: mainTask['id'],
+                  userTaskId: userTask['id'],
                 ),
               ),
-            ],
-          ),
-          trailing: userTask['isCompleted']
-              ? const Icon(Icons.check_circle, color: Colors.green)
-              : Text('${progress.toInt()}%'),
-          onTap: () {
-            // يمكن إضافة تفاصيل المهمة هنا
+            );
           },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.chevron_left,
+                    color: Colors.grey), // السهم يسار
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.end, // ✅ يجعل كل العناصر تلتصق يمين
+                    children: [
+                      Align(
+                        alignment: Alignment
+                            .centerRight, // ✅ يجعل العنوان على أقصى اليمين
+                        child: Text(
+                          title,
+                          style: theme.textTheme.titleMedium,
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      if (college != null)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'الكلية: $college',
+                            textAlign: TextAlign.right,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      if (target != null)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'التقدم: $target',
+                            textAlign: TextAlign.right,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: LinearProgressIndicator(
+                          value: progress / 100,
+                          backgroundColor: Colors.grey[300],
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            userTask['isCompleted']
+                                ? Colors.green
+                                : theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+                CircleAvatar(
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  child:
+                      Icon(Icons.assignment, color: theme.colorScheme.primary),
+                ), // الأيقونة يمين
+              ],
+            ),
+          ),
         );
       },
       separatorBuilder: (context, index) =>
