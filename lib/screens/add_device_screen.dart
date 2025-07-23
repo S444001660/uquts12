@@ -13,6 +13,8 @@ import '../utils/validation_utils.dart';
 import '../utils/image_utils.dart';
 import '../utils/device_form_constants.dart';
 import 'package:uquts1/services/permissions_service.dart'; // استيراد خدمة الصلاحيات
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 //------------------------------------------------------------------------------
 
@@ -20,12 +22,16 @@ class AddDeviceScreen extends StatefulWidget {
   final DeviceModel? device;
   final String? labId;
   final Map<String, String?>? scannedBarcodeData;
+  final String? taskId;
+  final String? userTaskId;
 
   const AddDeviceScreen({
     super.key,
     this.device,
     this.labId,
     this.scannedBarcodeData,
+    this.taskId,
+    this.userTaskId,
   });
 
   @override
@@ -302,6 +308,11 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       if (isNewDevice && currentUser != null) {
         await TaskProgressService.updateDeviceRegistrationProgress(
             currentUser.uid);
+        await _updateProgressAfterDeviceAdded(); // <-- ✅ أضف هذا هنا
+      }
+      if (isNewDevice && currentUser != null) {
+        await TaskProgressService.updateDeviceRegistrationProgress(
+            currentUser.uid);
       }
 
       return deviceToSave;
@@ -400,6 +411,23 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         }
       }
     }
+  }
+
+  Future<void> _updateProgressAfterDeviceAdded() async {
+    if (widget.taskId == null || widget.userTaskId == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('devices')
+        .where('taskId', isEqualTo: widget.taskId)
+        .where('userId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+        .get();
+
+    final registeredCount = snapshot.docs.length;
+
+    await FirebaseFirestore.instance
+        .collection('user_tasks')
+        .doc(widget.userTaskId)
+        .update({'progressCount': registeredCount});
   }
 
   Widget _buildDetailRow(
