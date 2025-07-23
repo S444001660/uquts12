@@ -333,7 +333,7 @@ class _ReportsScreenState extends State<ReportsScreen>
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 2,
-            childAspectRatio: 1.5,
+            childAspectRatio: 1.2,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
             children: [
@@ -553,57 +553,87 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   Widget _buildLineChart() {
-    final data = _devicesByTimePeriod;
-    if (data.isEmpty) return const Center(child: Text('لا توجد بيانات'));
+  final data = _devicesByTimePeriod;
+  if (data.isEmpty) return const Center(child: Text('لا توجد بيانات'));
 
-    final spots = data.entries.map((entry) {
-      final index = data.keys.toList().indexOf(entry.key);
-      return FlSpot(index.toDouble(), entry.value.toDouble());
-    }).toList();
+  final labels = data.keys.toList();
+  final values = data.values.toList();
 
-    return LineChart(
-      LineChartData(
-        gridData: const FlGridData(show: true),
-        titlesData: FlTitlesData(
-          leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                final keys = data.keys.toList();
-                if (value.toInt() < keys.length) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(keys[value.toInt()],
-                        style: const TextStyle(fontSize: 10)),
-                  );
-                }
-                return const Text('');
-              },
-            ),
-          ),
-          topTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  final spots = List.generate(
+    labels.length,
+    (i) => FlSpot(i.toDouble(), values[i].toDouble()),
+  );
+
+  return LineChart(
+    LineChartData(
+      minX: 0,
+      maxX: labels.length - 1.toDouble(),
+      gridData: FlGridData(
+        show: true,
+        drawVerticalLine: true,
+        drawHorizontalLine: true,
+        horizontalInterval: 10,
+        verticalInterval: 1,
+        getDrawingHorizontalLine: (value) => FlLine(
+          color: Colors.grey.shade300,
+          strokeWidth: 1,
         ),
-        borderData: FlBorderData(show: true),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            color: Theme.of(context).colorScheme.primary,
-            barWidth: 3,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-                show: true,
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
-          ),
-        ],
+        getDrawingVerticalLine: (value) => FlLine(
+          color: Colors.grey.shade300,
+          strokeWidth: 1,
+        ),
       ),
-    );
-  }
+      titlesData: FlTitlesData(
+        leftTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 40,
+          ),
+        ),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 32,
+            getTitlesWidget: (value, _) {
+              if (value % 1 != 0 || value < 0 || value >= labels.length) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  labels[value.toInt()],
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              );
+            },
+          ),
+        ),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      ),
+      borderData: FlBorderData(show: true),
+      lineBarsData: [
+        LineChartBarData(
+          spots: spots,
+          isCurved: false,
+          barWidth: 4,
+          color: Theme.of(context).colorScheme.primary,
+          belowBarData: BarAreaData(show: false),
+          dotData: FlDotData(
+            show: true,
+            getDotPainter: (spot, percent, barData, index) {
+              return FlDotCirclePainter(
+                radius: 6,
+                color: Theme.of(context).colorScheme.primary,
+                strokeWidth: 0,
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildPieChart() {
     if (_devicesByCollege.isEmpty) {
@@ -619,7 +649,7 @@ class _ReportsScreenState extends State<ReportsScreen>
         color: _getCollegeColor(entry.key),
         value: entry.value.toDouble(),
         title: '${percentage.toStringAsFixed(0)}%',
-        radius: 80,
+        radius:60,
         titleStyle: const TextStyle(
             fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
       );
@@ -632,7 +662,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           child: PieChart(
             PieChartData(
               sections: sections,
-              centerSpaceRadius: 40,
+              centerSpaceRadius: 35,
               sectionsSpace: 2,
             ),
           ),
