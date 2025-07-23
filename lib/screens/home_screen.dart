@@ -23,6 +23,7 @@ import 'task_details_screen.dart';
 import 'lab_details_screen.dart';
 import 'view_device_screen.dart';
 import '../screens/technician_stats_screen.dart'; // <--- جديد
+import 'package:firebase_auth/firebase_auth.dart';
 
 class UpdatedHomeScreen extends StatefulWidget {
   const UpdatedHomeScreen({super.key});
@@ -39,12 +40,15 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   String? _error;
   UserRole? _currentUserRole;
   UserAccountModel? _currentUser;
+  String currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  List<Map<String, dynamic>> assignedTasks = [];
 
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    fetchAdminAssignedTasks();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
@@ -86,6 +90,22 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         });
       }
     }
+  }
+
+  Future<void> fetchAdminAssignedTasks() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('tasks')
+        .where('createdBy', isEqualTo: currentUserId)
+        .get();
+
+    setState(() {
+      assignedTasks = snapshot.docs
+          .map((doc) => {
+                'taskId': doc.id,
+                ...doc.data(),
+              })
+          .toList();
+    });
   }
 
   Future<void> _loadRecentActivities() async {
@@ -485,19 +505,9 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       ),
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _userTasks.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.task_alt, size: 50, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text('لا توجد مهام حالية',
-                          style: TextStyle(fontSize: 18, color: Colors.grey)),
-                    ],
-                  ),
-                )
-              : _buildUserTasksList(theme),
+          : (_currentUserRole == UserRole.technician
+              ? _buildUserTasksList(theme)
+              : _buildAdminAssignedTasksList(theme)),
     );
   }
 
@@ -603,6 +613,60 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       separatorBuilder: (context, index) =>
           const Divider(height: 1, indent: 16, endIndent: 16),
     );
+  }
+
+  Widget _buildAdminAssignedTasksList(ThemeData theme) {
+    return assignedTasks.isEmpty
+        ? const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.assignment_turned_in_outlined,
+                    size: 50, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('لا توجد مهام مسندة',
+                    style: TextStyle(fontSize: 18, color: Colors.grey)),
+              ],
+            ),
+          )
+        : ListView.separated(
+            itemCount: assignedTasks.length,
+            separatorBuilder: (context, index) =>
+                const Divider(height: 1, indent: 16, endIndent: 16),
+            itemBuilder: (context, index) {
+              final task = assignedTasks[index];
+              return ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                leading: const Icon(Icons.chevron_left, color: Colors.grey),
+                title: Text(task['typeDisplayName'] ?? 'مهمة',
+                    style: theme.textTheme.titleMedium,
+                    textAlign: TextAlign.right),
+                subtitle: Text(
+                  task['notes'] ?? '',
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.bodySmall,
+                ),
+                trailing: CircleAvatar(
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  child: Icon(Icons.assignment_outlined,
+                      color: theme.colorScheme.primary),
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TaskDetailsScreen(
+                        taskId: task['taskId'],
+                        userTaskId: task['userTaskId'],
+                        isAdminView: true,
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
   }
 
   Widget _buildActivitiesList(ThemeData theme) {
