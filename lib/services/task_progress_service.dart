@@ -45,50 +45,67 @@ class TaskProgressService {
   }
 
   /// جلب مهام المستخدم النشطة (الدالة التي كانت مفقودة)
+  static Future<List<Map<String, dynamic>>> getTasksAssignedByUser(
+      String adminId) async {
+    try {
+      // 1. جلب المهام التي أنشأها الأدمن
+      final tasksSnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('assignedBy', isEqualTo: adminId)
+          .get();
+
+      List<Map<String, dynamic>> result = [];
+
+      for (final taskDoc in tasksSnapshot.docs) {
+        final userTasksSnapshot = await FirebaseFirestore.instance
+            .collection('user_tasks')
+            .where('taskId', isEqualTo: taskDoc.id)
+            .get();
+
+        for (final userTaskDoc in userTasksSnapshot.docs) {
+          result.add({
+            'mainTask': taskDoc.data(),
+            'userTask': userTaskDoc.data(),
+          });
+        }
+      }
+
+      return result;
+    } catch (e) {
+      print('Error loading assigned tasks by admin: $e');
+      return [];
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> getUserActiveTasks(
       String userId) async {
     try {
-      // 1. جلب مهام المستخدم الفردية النشطة
-      final userTasksQuery = await _firestore
+      final userTasksSnapshot = await _firestore
           .collection('user_tasks')
           .where('userId', isEqualTo: userId)
           .where('isCompleted', isEqualTo: false)
           .get();
 
-      if (userTasksQuery.docs.isEmpty) return [];
+      List<Map<String, dynamic>> result = [];
 
-      final userTasks = userTasksQuery.docs
-          .map((doc) => UserTaskModel.fromMap(doc.data()))
-          .toList();
+      for (final userTaskDoc in userTasksSnapshot.docs) {
+        final userTaskData = userTaskDoc.data();
+        final taskId = userTaskData['taskId'];
 
-      // 2. استخراج معرفات المهام الرئيسية لتجنب الطلبات المتكررة
-      final taskIds = userTasks.map((ut) => ut.taskId).toSet().toList();
-      if (taskIds.isEmpty) return [];
+        final taskDoc = await _firestore.collection('tasks').doc(taskId).get();
+        if (!taskDoc.exists) continue;
 
-      // 3. جلب كل المهام الرئيسية المطلوبة في طلب واحد
-      final mainTasksQuery = await _firestore
-          .collection('tasks')
-          .where('id', whereIn: taskIds)
-          .get();
+        final mainTaskData = taskDoc.data();
 
-      final mainTasksMap = {
-        for (var doc in mainTasksQuery.docs)
-          doc.id: TaskModel.fromMap(doc.data())
-      };
-
-      // 4. دمج بيانات مهام المستخدم مع المهام الرئيسية
-      List<Map<String, dynamic>> combinedTasks = [];
-      for (var userTask in userTasks) {
-        if (mainTasksMap.containsKey(userTask.taskId)) {
-          combinedTasks.add({
-            'userTask': userTask,
-            'mainTask': mainTasksMap[userTask.taskId]!,
-          });
-        }
+        result.add({
+          'mainTask': mainTaskData,
+          'userTask': userTaskData,
+        });
       }
-      return combinedTasks;
+
+      return result;
     } catch (e) {
-      print('Error getting user active tasks: $e');
+      print('Error loading user active tasks: $e');
       return [];
     }
   }

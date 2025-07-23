@@ -1,4 +1,3 @@
-// screens/improved_add_task_screen.dart
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,18 +14,17 @@ class ImprovedAddTaskScreen extends StatefulWidget {
 
 class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
   final _formKey = GlobalKey<FormState>();
-  
   TaskType _selectedTaskType = TaskType.deviceRegistration;
   String? _selectedCollege;
   String _notes = '';
   List<String> _assignedTechnicians = [];
   List<Map<String, dynamic>> _availableUsers = [];
   bool _isLoading = false;
-  int _targetCount = 1; // للمهام التي تتطلب عدد معين (مثل تسجيل أجهزة)
+  int _targetCount = 1;
 
   final List<String> _colleges = [
     'كلية الحاسب',
-    'كلية الهندسة', 
+    'كلية الهندسة',
     'كلية العلوم',
     'كلية الطب',
     'كلية الإدارة والاقتصاد'
@@ -42,13 +40,11 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
 
   Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
-    
     try {
-      // جلب جميع المستخدمين النشطين
       final QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('isActive', isEqualTo: true)
-          .where('role', whereIn: ['technician', 'supervisor']) // فقط الفنيين والمشرفين
+          .where('role', whereIn: ['technician', 'supervisor'])
           .get();
 
       setState(() {
@@ -68,7 +64,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في تحميل قائمة المستخدمين: $e')),
+        SnackBar(content: Text('خطأ في تحميل المستخدمين: $e')),
       );
     }
   }
@@ -85,8 +81,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
 
     try {
       final taskId = const Uuid().v4();
-      
-      // إنشاء المهمة الأساسية
+      final currentUser = FirebaseAuth.instance.currentUser;
       final taskData = {
         'id': taskId,
         'type': _selectedTaskType.name,
@@ -99,13 +94,12 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
         'isCompleted': false,
         'completionPercentage': 0.0,
         'createdAt': Timestamp.now(),
-        'createdBy': FirebaseAuth.instance.currentUser?.uid,
+        'createdBy': currentUser?.uid,
         'completedAt': null,
       };
 
       await FirebaseFirestore.instance.collection('tasks').doc(taskId).set(taskData);
 
-      // إنشاء مهمة فردية لكل موظف مُسند إليه
       for (String userId in _assignedTechnicians) {
         final individualTaskId = const Uuid().v4();
         await FirebaseFirestore.instance
@@ -123,18 +117,13 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
       }
 
       if (!mounted) return;
-      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم إنشاء المهمة وإسنادها بنجاح'),
-          backgroundColor: Colors.green,
-        ),
+        const SnackBar(content: Text('تم إنشاء المهمة بنجاح'), backgroundColor: Colors.green),
       );
-      
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في إنشاء المهمة: $e')),
+        SnackBar(content: Text('حدث خطأ: $e')),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -166,15 +155,11 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
 
     final filteredUsers = _availableUsers.where((user) {
       return user['fullName'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-             user['employeeId'].toLowerCase().contains(_searchQuery.toLowerCase());
+          user['employeeId'].toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('إسناد مهمة جديدة'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('إسناد مهمة جديدة')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -182,205 +167,95 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
           child: ListView(
             children: [
               // نوع المهمة
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'نوع المهمة',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ...TaskType.values.map((type) => RadioListTile<TaskType>(
-                        title: Text(_getTaskTypeDisplayName(type)),
-                        value: type,
-                        groupValue: _selectedTaskType,
-                        onChanged: (value) => setState(() => _selectedTaskType = value!),
-                      )),
-                    ],
-                  ),
+              DropdownButtonFormField<TaskType>(
+                value: _selectedTaskType,
+                items: TaskType.values.map((type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Text(_getTaskTypeDisplayName(type)),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => _selectedTaskType = value!),
+                decoration: const InputDecoration(
+                  labelText: 'نوع المهمة',
+                  border: OutlineInputBorder(),
                 ),
               ),
-              
               const SizedBox(height: 16),
 
               // الكلية
               DropdownButtonFormField<String>(
+                value: _selectedCollege,
+                items: _colleges.map((college) {
+                  return DropdownMenuItem(
+                    value: college,
+                    child: Text(college),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => _selectedCollege = value),
                 decoration: const InputDecoration(
-                  labelText: 'اختر الكلية',
+                  labelText: 'الكلية',
                   border: OutlineInputBorder(),
                 ),
-                value: _selectedCollege,
-                items: _colleges.map((college) => DropdownMenuItem(
-                  value: college,
-                  child: Text(college),
-                )).toList(),
-                onChanged: (value) => setState(() => _selectedCollege = value),
-                validator: (value) => value == null ? 'الرجاء اختيار الكلية' : null,
+                validator: (value) => value == null ? 'يرجى اختيار الكلية' : null,
               ),
-
               const SizedBox(height: 16),
 
-              // الهدف المطلوب (للمهام القابلة للقياس)
               if (_selectedTaskType == TaskType.deviceRegistration)
                 TextFormField(
+                  initialValue: _targetCount.toString(),
+                  keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'عدد الأجهزة المطلوب تسجيلها',
                     border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.numbers),
                   ),
-                  keyboardType: TextInputType.number,
-                  initialValue: _targetCount.toString(),
-                  onChanged: (value) => _targetCount = int.tryParse(value) ?? 1,
-                  validator: (value) {
-                    final number = int.tryParse(value ?? '');
-                    if (number == null || number <= 0) {
-                      return 'يرجى إدخال رقم صحيح أكبر من صفر';
-                    }
-                    return null;
-                  },
+                  onChanged: (val) => _targetCount = int.tryParse(val) ?? 1,
                 ),
-
-              const SizedBox(height: 16),
-
-              // قائمة الموظفين
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'إسناد المهمة إلى:',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'المحدد: ${_assignedTechnicians.length}',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 12),
-                      
-                      // شريط البحث
-                      TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'بحث عن موظف...',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (value) => setState(() => _searchQuery = value),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // أزرار التحديد السريع
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _assignedTechnicians = _availableUsers
-                                    .map((user) => user['id'] as String)
-                                    .toList();
-                              });
-                            },
-                            child: const Text('تحديد الكل'),
-                          ),
-                          TextButton(
-                            onPressed: () => setState(() => _assignedTechnicians.clear()),
-                            child: const Text('إلغاء التحديد'),
-                          ),
-                        ],
-                      ),
-
-                      // قائمة الموظفين
-                      SizedBox(
-                        height: 300,
-                        child: ListView.builder(
-                          itemCount: filteredUsers.length,
-                          itemBuilder: (context, index) {
-                            final user = filteredUsers[index];
-                            final isSelected = _assignedTechnicians.contains(user['id']);
-                            
-                            return Card(
-                              color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
-                              child: CheckboxListTile(
-                                value: isSelected,
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    if (value == true) {
-                                      _assignedTechnicians.add(user['id']);
-                                    } else {
-                                      _assignedTechnicians.remove(user['id']);
-                                    }
-                                  });
-                                },
-                                title: Text(user['fullName']),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('رقم الموظف: ${user['employeeId']}'),
-                                    Text('القسم: ${user['department']}'),
-                                    Text('النقاط: ${user['points']}', 
-                                      style: TextStyle(
-                                        color: Theme.of(context).colorScheme.primary,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                secondary: CircleAvatar(
-                                  backgroundColor: Theme.of(context).colorScheme.secondary,
-                                  child: Text(
-                                    user['fullName'][0].toUpperCase(),
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
               const SizedBox(height: 16),
 
               // الملاحظات
               TextFormField(
-                maxLines: 4,
+                maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'ملاحظات وتفاصيل المهمة',
+                  labelText: 'ملاحظات المهمة',
                   border: OutlineInputBorder(),
                 ),
-                onChanged: (value) => _notes = value,
+                onChanged: (val) => _notes = val,
               ),
+              const SizedBox(height: 16),
 
-              const SizedBox(height: 24),
+              // البحث واختيار الموظفين
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'بحث عن موظف',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              const SizedBox(height: 8),
+              ...filteredUsers.map((user) {
+                final isSelected = _assignedTechnicians.contains(user['id']);
+                return CheckboxListTile(
+                  title: Text(user['fullName']),
+                  subtitle: Text('رقم الموظف: ${user['employeeId']}'),
+                  value: isSelected,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        _assignedTechnicians.add(user['id']);
+                      } else {
+                        _assignedTechnicians.remove(user['id']);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+              const SizedBox(height: 20),
 
-              // زر الإرسال
               ElevatedButton.icon(
                 onPressed: _createTask,
                 icon: const Icon(Icons.send),
                 label: const Text('إسناد المهمة'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.all(16),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
               ),
             ],
           ),

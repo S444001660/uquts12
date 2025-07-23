@@ -12,6 +12,10 @@ import '../utils/validation_utils.dart'; // دوال للتحقق من صحة م
 import '../utils/image_utils.dart'; // دوال مساعدة للتعامل مع الصور.
 import '../utils/device_form_constants.dart'; // ثوابت وقوائم مستخدمة في الفورم.
 import 'add_device_screen.dart'; // شاشة إضافة/تعديل جهاز.
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../services/firebase_database_service.dart';
+
 // -----------------------------------------------------------------
 
 /// ويدجت شاشة إضافة أو تعديل معمل، وهي StatefulWidget لأن حالتها تتغير.
@@ -132,6 +136,15 @@ class _AddLabScreenState extends State<AddLabScreen> {
     }
   }
 
+  Future<bool> _isLabNumberExists(String labNumber) async {
+  final snapshot = await FirebaseFirestore.instance
+      .collection('labs') // اسم الكولكشن حسب الاستخدام
+      .where('labNumber', isEqualTo: labNumber)
+      .get();
+
+  return snapshot.docs.isNotEmpty;
+}
+
   //------------------------------------------------------------------------------
 
   /// دالة الحفظ الأساسية التي تحتوي على منطق التحقق والحفظ، لإعادة استخدامها.
@@ -156,6 +169,20 @@ class _AddLabScreenState extends State<AddLabScreen> {
           message: 'يرجى التقاط صورة للحالة الحالية للمعمل',
           type: SnackBarType.error);
       return null;
+    }
+
+    final labNumber = _labNumberController.text.trim();
+
+    if (widget.lab == null) {
+      final exists = await _isLabNumberExists(labNumber);
+      if (exists) {
+        UIHelpers.showSnackBar(
+          context: context,
+          message: 'رقم المعمل موجود مسبقًا، يرجى اختيار رقم مختلف',
+          type: SnackBarType.error,
+        );
+        return null;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -347,7 +374,7 @@ class _AddLabScreenState extends State<AddLabScreen> {
                       existingImageUrl: _existingImageUrl,
                       onPickImage: _pickImage,
                     ),
-                    const SizedBox(height: _defaultSpacing),
+                    const SizedBox(height: 42),
                     _ActionButtons(
                       isEditing: isEditing,
                       labStatus: _labStatus,
@@ -674,8 +701,6 @@ class _ActionButtons extends StatelessWidget {
                 label: const Text('إضافة جهاز'),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
-                  backgroundColor: theme.colorScheme.secondary,
-                  foregroundColor: theme.colorScheme.onSecondary,
                 ),
               ),
             ),
