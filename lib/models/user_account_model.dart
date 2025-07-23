@@ -5,21 +5,24 @@ class UserAccountModel {
   final String uid; // معرف المستخدم الفريد من Firebase Authentication
   final String email;
   final String fullName;
-  final String role; // يمكن أن يكون 'admin' أو 'user'
+  final String role; // يمكن أن يكون 'admin' أو 'technician' أو 'supervisor'
   final DateTime createdAt;
-  final int points; // <--- حقل جديد: نقاط المستخدم
-  final int tasksCompleted; // <--- حقل جديد: عدد المهام المكتملة
-  final int devicesRegistered; // <--- حقل جديد: عدد الأجهزة المسجلة
+  final bool isActive; // <--- تم إضافة الحقل المفقود هنا
+  final int points;
+  final int tasksCompleted;
+  final int devicesRegistered;
 
   UserAccountModel({
     required this.uid,
     required this.email,
     required this.fullName,
-    this.role = 'user', // القيمة الافتراضية لأي مستخدم جديد هي 'user'
+    this.role =
+        'technician', // القيمة الافتراضية لأي مستخدم جديد هي 'technician'
     required this.createdAt,
-    this.points = 0, // <--- قيمة افتراضية
-    this.tasksCompleted = 0, // <--- قيمة افتراضية
-    this.devicesRegistered = 0, // <--- قيمة افتراضية
+    this.isActive = true, // <--- القيمة الافتراضية عند إنشاء مستخدم جديد
+    this.points = 0,
+    this.tasksCompleted = 0,
+    this.devicesRegistered = 0,
   });
 
   /// دالة لتحويل بيانات المستخدم إلى صيغة Map لتخزينها في Firestore.
@@ -30,9 +33,10 @@ class UserAccountModel {
       'fullName': fullName,
       'role': role,
       'createdAt': Timestamp.fromDate(createdAt),
-      'points': points, // <--- تضمين الحقل الجديد
-      'tasksCompleted': tasksCompleted, // <--- تضمين الحقل الجديد
-      'devicesRegistered': devicesRegistered, // <--- تضمين الحقل الجديد
+      'isActive': isActive, // <--- تضمين الحقل الجديد عند الكتابة في Firestore
+      'points': points,
+      'tasksCompleted': tasksCompleted,
+      'devicesRegistered': devicesRegistered,
     };
   }
 
@@ -44,12 +48,11 @@ class UserAccountModel {
       fullName: map['fullName'] ?? '',
       role: (map['role'] ?? 'guest').toLowerCase(),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
-      points: (map['points'] ?? 0).toInt(), // <--- استخراج الحقل الجديد
-      tasksCompleted:
-          (map['tasksCompleted'] ?? 0).toInt(), // <--- استخراج الحقل الجديد
-      devicesRegistered:
-          (map['devicesRegistered'] ?? 0).toInt(), // <--- استخراج الحقل الجديد
-          
+      isActive:
+          map['isActive'] ?? true, // <--- استخراج الحقل الجديد عند القراءة
+      points: (map['points'] ?? 0).toInt(),
+      tasksCompleted: (map['tasksCompleted'] ?? 0).toInt(),
+      devicesRegistered: (map['devicesRegistered'] ?? 0).toInt(),
     );
   }
 }

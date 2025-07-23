@@ -6,6 +6,7 @@ import '../models/lab_model.dart';
 import '../models/device_model.dart';
 import '../models/user_account_model.dart';
 import '../models/user_role_model.dart'; // <--- استيراد الملف الجديد
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'add_lab_screen.dart';
 import 'add_device_screen.dart';
@@ -19,6 +20,9 @@ import 'add_task.dart';
 import 'user_tasks_screen.dart';
 import '../services/firebase_database_service.dart';
 import 'task_details_screen.dart';
+import 'lab_details_screen.dart';
+import 'view_device_screen.dart';
+import '../screens/technician_stats_screen.dart'; // <--- جديد
 
 class UpdatedHomeScreen extends StatefulWidget {
   const UpdatedHomeScreen({super.key});
@@ -71,12 +75,16 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         _loadUserTasks(),
       ]);
 
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     } catch (e) {
-      setState(() {
-        _error = 'حدث خطأ في تحميل البيانات: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'حدث خطأ في تحميل البيانات: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -86,10 +94,20 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         await FirebaseDatabaseService.getDevices();
     List<RecentActivity> allActivities = [];
 
+    // دالة داخلية لجلب اسم المستخدم
+    Future<String?> _getUserName(String? uid) async {
+      if (uid == null) return null;
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      return userDoc.data()?['fullName'];
+    }
+
     for (var lab in labs) {
+      final createdByName = await _getUserName(lab.createdBy);
       allActivities.add(RecentActivity(
         id: lab.id,
-        title: 'إضافة معمل ${lab.labNumber}',
+        title:
+            'إضافة معمل ${lab.labNumber} بواسطة ${createdByName ?? "غير معروف"}',
         type: 'lab',
         timestamp: lab.createdAt,
         originalObject: lab,
@@ -97,9 +115,11 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     }
 
     for (var device in devices) {
+      final createdByName = await _getUserName(device.createdBy);
       allActivities.add(RecentActivity(
         id: device.id,
-        title: 'إضافة جهاز "${device.name}"',
+        title:
+            'إضافة جهاز "${device.name}" بواسطة ${createdByName ?? "غير معروف"}',
         type: 'device',
         timestamp: device.createdAt,
         originalObject: device,
@@ -107,15 +127,24 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     }
 
     allActivities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    _recentActivities = allActivities.take(5).toList();
+    if (mounted) {
+      setState(() {
+        _recentActivities = allActivities.take(5).toList();
+      });
+    }
   }
 
   Future<void> _loadUserTasks() async {
     if (_currentUser == null) return;
 
     try {
-      _userTasks =
+      final tasks =
           await TaskProgressService.getUserActiveTasks(_currentUser!.uid);
+      if (mounted) {
+        setState(() {
+          _userTasks = tasks;
+        });
+      }
     } catch (e) {
       print('خطأ في تحميل المهام: $e');
     }
@@ -245,9 +274,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   Widget _buildUserInfoHeader(ThemeData theme) {
     final double topPadding = MediaQuery.of(context).padding.top;
     final userName = _currentUser?.fullName ?? 'مستخدم';
-    // استخدام _currentUserRole?.displayName بدلاً من دالة _getRoleDisplayName
-    final userRole =
-        _currentUserRole?.displayName ?? 'مستخدم'; // <--- تم التعديل هنا
+    final userRole = _currentUserRole?.displayName ?? 'مستخدم';
 
     return Container(
       padding: EdgeInsets.only(
@@ -307,7 +334,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
             radius: 35,
             backgroundColor: Colors.white,
             child: Text(
-              userName[0].toUpperCase(),
+              userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -328,92 +355,89 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   }
 
   Widget _buildActionButtons() {
-    List<Widget> actions = [];
+    List<_HomeButton> buttons = [];
 
     // أزرار للجميع
-    actions.addAll([
-      _buildActionButton(context,
-          icon: Icons.add_business_outlined,
-          label: 'إضافة معمل',
-          onTap: () => _navigateAndReload(const AddLabScreen())),
-      _buildActionButton(context,
-          icon: Icons.add_to_queue_outlined,
-          label: 'إضافة جهاز',
-          onTap: () => _navigateAndReload(const AddDeviceScreen())),
+    buttons.addAll([
+      _HomeButton(Icons.add_business_outlined, 'إضافة معمل',
+          () => _navigateAndReload(const AddLabScreen())),
+      _HomeButton(Icons.add_to_queue_outlined, 'إضافة جهاز',
+          () => _navigateAndReload(const AddDeviceScreen())),
     ]);
 
-    // أزرار خاصة بالأدمن والمشرف
+    // أدمن ومشرف
     if (_currentUserRole == UserRole.admin ||
         _currentUserRole == UserRole.supervisor) {
-      actions.addAll([
-        _buildActionButton(context,
-            icon: Icons.assignment_add,
-            label: 'إسناد مهمة',
-            onTap: () => _navigateAndReload(const ImprovedAddTaskScreen())),
-        if (_currentUserRole == UserRole.admin) ...[
-          _buildActionButton(context,
-              icon: Icons.people,
-              label: 'إدارة الموظفين',
-              onTap: () =>
-                  _navigateAndReload(const EmployeeManagementScreen())),
-        ],
+      buttons.add(_HomeButton(Icons.assignment_add, 'إسناد مهمة',
+          () => _navigateAndReload(const ImprovedAddTaskScreen())));
+
+      if (_currentUserRole == UserRole.admin) {
+        buttons.addAll([
+          _HomeButton(Icons.people, 'إدارة الموظفين',
+              () => _navigateAndReload(const EmployeeManagementScreen())),
+          _HomeButton(Icons.analytics, 'التقارير',
+              () => _navigateAndReload(const ReportsScreen())),
+        ]);
+      }
+    }
+    if (_currentUserRole == UserRole.technician) {
+      buttons.addAll([
+        _HomeButton(Icons.task_alt, 'مهامي',
+            () => _navigateAndReload(const UserTasksScreen())),
+        _HomeButton(
+            Icons.insights,
+            'إحصائياتي',
+            () =>
+                _navigateAndReload(TechnicianStatsScreen(user: _currentUser!))),
       ]);
     }
 
-    // زر المهام للفنيين
-    if (_currentUserRole == UserRole.technician) {
-      actions.add(
-        _buildActionButton(context,
-            icon: Icons.task_alt,
-            label: 'مهامي',
-            onTap: () => _navigateAndReload(const UserTasksScreen())),
-      );
-    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          double itemWidth = (constraints.maxWidth - 24) / 4;
 
-    // أزرار إضافية للأدمن
-    if (_currentUserRole == UserRole.admin ||
-        _currentUserRole == UserRole.supervisor) {
-      actions.add(
-        _buildActionButton(context,
-            icon: Icons.analytics,
-            label: 'التقارير',
-            onTap: () => _navigateAndReload(const ReportsScreen())),
-      );
-    }
-
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: actions,
+          return Wrap(
+            spacing: 8,
+            runSpacing: 12,
+            children: buttons.map((btn) {
+              return SizedBox(
+                width: itemWidth,
+                child: _buildStyledButton(btn),
+              );
+            }).toList(),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildActionButton(BuildContext context,
-      {required IconData icon,
-      required String label,
-      required VoidCallback onTap}) {
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     final theme = Theme.of(context);
     return SizedBox(
-      width: (MediaQuery.of(context).size.width - 48) /
-          2, // عرض نصف الشاشة تقريباً
+      width: (MediaQuery.of(context).size.width - 64) /
+          4, // يجعلها 4 أزرار في الصف
       child: Card(
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 32, color: theme.colorScheme.primary),
-                const SizedBox(height: 8),
+                Icon(icon, size: 28, color: theme.colorScheme.primary),
+                const SizedBox(height: 4),
                 Text(
                   label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -485,10 +509,11 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         final mainTask = taskData['mainTask'];
         final userTask = taskData['userTask'];
 
-        final progress = mainTask['targetCount'] != null
-            ? (userTask['progress'] / mainTask['targetCount'] * 100)
-                .clamp(0, 100)
-            : (userTask['isCompleted'] ? 100.0 : 0.0);
+        final progress =
+            mainTask['targetCount'] != null && mainTask['targetCount'] > 0
+                ? (userTask['progress'] / mainTask['targetCount'] * 100)
+                    .clamp(0, 100)
+                : (userTask['isCompleted'] ? 100.0 : 0.0);
 
         final String title = mainTask['typeDisplayName'] ?? 'مهمة';
         final String? college = mainTask['college'];
@@ -619,7 +644,21 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         ),
       ),
       onTap: () {
-        // يمكن إضافة التنقل لتفاصيل العنصر هنا
+        if (activity.type == 'lab') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => LabDetailsScreen(lab: activity.originalObject),
+            ),
+          );
+        } else if (activity.type == 'device') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ViewDeviceScreen(device: activity.originalObject),
+            ),
+          );
+        }
       },
     );
   }
@@ -649,22 +688,54 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     );
   }
 
-  // تم حذف دالة _getRoleDisplayName() واستبدالها بـ UserRoleExtension.displayName
-  // String _getRoleDisplayName(UserRole? role) {
-  //   switch (role) {
-  //     case UserRole.admin:
-  //       return 'مدير النظام';
-  //     case UserRole.supervisor:
-  //       return 'مشرف';
-  //     case UserRole.technician:
-  //       return 'فني';
-  //     case null:
-  //       return 'مستخدم';
-  //   }
-  // }
+  // =======================================================================
+  // تم نقل الدالة هنا لحل مشكلة عدم العثور على 'context'
+  // =======================================================================
+  Widget _buildStyledButton(_HomeButton btn) {
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: btn.onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            )
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(btn.icon, size: 26, color: theme.colorScheme.primary),
+            const SizedBox(height: 6),
+            Text(
+              btn.label,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+            )
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-// كلاس محلي للأنشطة الأخيرة (يبقى كما هو)
+// كلاس مساعد للأزرار
+class _HomeButton {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  _HomeButton(this.icon, this.label, this.onTap);
+}
+
+// كلاس مساعد للأنشطة الأخيرة
 class RecentActivity {
   final String id;
   final String title;

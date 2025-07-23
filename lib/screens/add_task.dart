@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// تعريف أنواع المهام لتسهيل التعامل معها
 enum TaskType { inspection, setup, maintenance, deviceRegistration, other }
 
 class ImprovedAddTaskScreen extends StatefulWidget {
@@ -38,14 +39,14 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     _loadUsers();
   }
 
+  // دالة لجلب المستخدمين (الفنيين والمشرفين) من قاعدة البيانات
   Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
     try {
       final QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('isActive', isEqualTo: true)
-          .where('role', whereIn: ['technician', 'supervisor'])
-          .get();
+          .where('role', whereIn: ['technician', 'supervisor']).get();
 
       setState(() {
         _availableUsers = snapshot.docs.map((doc) {
@@ -63,25 +64,37 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('خطأ في تحميل المستخدمين: $e')),
       );
     }
   }
 
+  // --- الدالة المعدلة لإنشاء المهمة باستخدام WriteBatch ---
   Future<void> _createTask() async {
+    // 1. التحقق من أن الحقول المطلوبة معبأة
     if (!_formKey.currentState!.validate() || _assignedTechnicians.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى تعبئة جميع الحقول واختيار موظف واحد على الأقل')),
+        const SnackBar(
+            content:
+                Text('يرجى تعبئة جميع الحقول واختيار موظف واحد على الأقل')),
       );
       return;
     }
 
     setState(() => _isLoading = true);
 
+    // 2. استخدام WriteBatch لضمان تنفيذ جميع العمليات معًا
+    final batch = FirebaseFirestore.instance.batch();
+
     try {
       final taskId = const Uuid().v4();
       final currentUser = FirebaseAuth.instance.currentUser;
+
+      // 3. تجهيز بيانات المهمة الرئيسية وإضافتها للـ Batch
+      final taskRef =
+          FirebaseFirestore.instance.collection('tasks').doc(taskId);
       final taskData = {
         'id': taskId,
         'type': _selectedTaskType.name,
@@ -89,7 +102,9 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
         'college': _selectedCollege,
         'assignedTo': _assignedTechnicians,
         'notes': _notes,
-        'targetCount': _selectedTaskType == TaskType.deviceRegistration ? _targetCount : null,
+        'targetCount': _selectedTaskType == TaskType.deviceRegistration
+            ? _targetCount
+            : null,
         'currentCount': 0,
         'isCompleted': false,
         'completionPercentage': 0.0,
@@ -97,18 +112,18 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
         'createdBy': currentUser?.uid,
         'completedAt': null,
       };
+      batch.set(taskRef, taskData);
 
-      await FirebaseFirestore.instance.collection('tasks').doc(taskId).set(taskData);
-
+      // 4. تجهيز المهام الفردية لكل مستخدم وإضافتها للـ Batch
       for (String userId in _assignedTechnicians) {
         final individualTaskId = const Uuid().v4();
-        await FirebaseFirestore.instance
+        final userTaskRef = FirebaseFirestore.instance
             .collection('user_tasks')
-            .doc(individualTaskId)
-            .set({
+            .doc(individualTaskId);
+        batch.set(userTaskRef, {
           'id': individualTaskId,
           'taskId': taskId,
-          'userId': userId,
+          'userId': userId, // التأكد من أن هذا هو الـ UID الصحيح للمستخدم
           'isCompleted': false,
           'progress': 0,
           'assignedAt': Timestamp.now(),
@@ -116,20 +131,29 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
         });
       }
 
+      // 5. تنفيذ جميع العمليات في الـ Batch مرة واحدة
+      await batch.commit();
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إنشاء المهمة بنجاح'), backgroundColor: Colors.green),
+        const SnackBar(
+            content: Text('تم إنشاء المهمة بنجاح'),
+            backgroundColor: Colors.green),
       );
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ: $e')),
+        SnackBar(content: Text('حدث خطأ أثناء إنشاء المهمة: $e')),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
+  // دالة مساعدة لترجمة نوع المهمة إلى نص عربي
   String _getTaskTypeDisplayName(TaskType type) {
     switch (type) {
       case TaskType.inspection:
@@ -147,119 +171,175 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+    // عرض شاشة تحميل أثناء جلب البيانات
+    if (_isLoading && _availableUsers.isEmpty) {
+      // تم حذف كلمة const من هنا لحل المشكلة
+      return Scaffold(
+        appBar: AppBar(title: const Text('إسناد مهمة جديدة')),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
+    // فلترة المستخدمين بناءً على البحث
     final filteredUsers = _availableUsers.where((user) {
-      return user['fullName'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          user['employeeId'].toLowerCase().contains(_searchQuery.toLowerCase());
+      final fullName = user['fullName']?.toLowerCase() ?? '';
+      final employeeId = user['employeeId']?.toLowerCase() ?? '';
+      final query = _searchQuery.toLowerCase();
+      return fullName.contains(query) || employeeId.contains(query);
     }).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('إسناد مهمة جديدة')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              // نوع المهمة
-              DropdownButtonFormField<TaskType>(
-                value: _selectedTaskType,
-                items: TaskType.values.map((type) {
-                  return DropdownMenuItem(
-                    value: type,
-                    child: Text(_getTaskTypeDisplayName(type)),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() => _selectedTaskType = value!),
-                decoration: const InputDecoration(
-                  labelText: 'نوع المهمة',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // الكلية
-              DropdownButtonFormField<String>(
-                value: _selectedCollege,
-                items: _colleges.map((college) {
-                  return DropdownMenuItem(
-                    value: college,
-                    child: Text(college),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() => _selectedCollege = value),
-                decoration: const InputDecoration(
-                  labelText: 'الكلية',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => value == null ? 'يرجى اختيار الكلية' : null,
-              ),
-              const SizedBox(height: 16),
-
-              if (_selectedTaskType == TaskType.deviceRegistration)
-                TextFormField(
-                  initialValue: _targetCount.toString(),
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'عدد الأجهزة المطلوب تسجيلها',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => _targetCount = int.tryParse(val) ?? 1,
-                ),
-              const SizedBox(height: 16),
-
-              // الملاحظات
-              TextFormField(
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'ملاحظات المهمة',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (val) => _notes = val,
-              ),
-              const SizedBox(height: 16),
-
-              // البحث واختيار الموظفين
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'بحث عن موظف',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (val) => setState(() => _searchQuery = val),
-              ),
-              const SizedBox(height: 8),
-              ...filteredUsers.map((user) {
-                final isSelected = _assignedTechnicians.contains(user['id']);
-                return CheckboxListTile(
-                  title: Text(user['fullName']),
-                  subtitle: Text('رقم الموظف: ${user['employeeId']}'),
-                  value: isSelected,
-                  onChanged: (val) {
-                    setState(() {
-                      if (val == true) {
-                        _assignedTechnicians.add(user['id']);
-                      } else {
-                        _assignedTechnicians.remove(user['id']);
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                children: [
+                  // نوع المهمة
+                  DropdownButtonFormField<TaskType>(
+                    value: _selectedTaskType,
+                    items: TaskType.values.map((type) {
+                      return DropdownMenuItem(
+                        value: type,
+                        child: Text(_getTaskTypeDisplayName(type)),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _selectedTaskType = value);
                       }
-                    });
-                  },
-                );
-              }).toList(),
-              const SizedBox(height: 20),
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'نوع المهمة',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
-              ElevatedButton.icon(
-                onPressed: _createTask,
-                icon: const Icon(Icons.send),
-                label: const Text('إسناد المهمة'),
+                  // الكلية
+                  DropdownButtonFormField<String>(
+                    value: _selectedCollege,
+                    items: _colleges.map((college) {
+                      return DropdownMenuItem(
+                        value: college,
+                        child: Text(college),
+                      );
+                    }).toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedCollege = value),
+                    decoration: const InputDecoration(
+                      labelText: 'الكلية',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) =>
+                        value == null ? 'يرجى اختيار الكلية' : null,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // حقل عدد الأجهزة (يظهر فقط لنوع مهمة تسجيل الأجهزة)
+                  if (_selectedTaskType == TaskType.deviceRegistration)
+                    TextFormField(
+                      initialValue: _targetCount.toString(),
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'عدد الأجهزة المطلوب تسجيلها',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => _targetCount = int.tryParse(val) ?? 1,
+                      validator: (val) {
+                        if (val == null ||
+                            val.isEmpty ||
+                            (int.tryParse(val) ?? 0) <= 0) {
+                          return 'يرجى إدخال عدد صحيح أكبر من صفر';
+                        }
+                        return null;
+                      },
+                    ),
+                  if (_selectedTaskType == TaskType.deviceRegistration)
+                    const SizedBox(height: 16),
+
+                  // الملاحظات
+                  TextFormField(
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'ملاحظات المهمة',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (val) => _notes = val,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // البحث واختيار الموظفين
+                  Text(
+                    'إسناد إلى:',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    decoration: const InputDecoration(
+                      labelText: 'بحث عن موظف بالاسم أو الرقم الوظيفي',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                  ),
+                  const SizedBox(height: 8),
+                  // قائمة الموظفين
+                  Container(
+                    height: 250, // تحديد ارتفاع ثابت للقائمة
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListView(
+                      children: filteredUsers.map((user) {
+                        final isSelected =
+                            _assignedTechnicians.contains(user['id']);
+                        return CheckboxListTile(
+                          title: Text(user['fullName']),
+                          subtitle: Text('رقم الموظف: ${user['employeeId']}'),
+                          value: isSelected,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _assignedTechnicians.add(user['id']);
+                              } else {
+                                _assignedTechnicians.remove(user['id']);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // زر الإرسال
+                  ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _createTask,
+                    icon: const Icon(Icons.send),
+                    label: const Text('إسناد المهمة'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          // عرض مؤشر التحميل فوق الواجهة عند الضغط على الزر
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }

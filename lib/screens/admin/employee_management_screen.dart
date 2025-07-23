@@ -1,8 +1,8 @@
-// screens/admin/employee_management_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/permissions_service.dart';
 import 'create_user_screen.dart';
+import 'employee_details_screen.dart'; // <-- الخطوة 1: استيراد الشاشة الجديدة
 
 class EmployeeManagementScreen extends StatefulWidget {
   const EmployeeManagementScreen({super.key});
@@ -249,55 +249,72 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
             color: isActive ? Colors.transparent : Colors.grey.shade300),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: _getRoleColor(employee['role']),
-          child: Text(
-            employee['fullName']?[0]?.toUpperCase() ?? '؟',
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(
-          employee['fullName'] ?? 'غير محدد',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isActive ? null : Colors.grey,
-            decoration: isActive ? null : TextDecoration.lineThrough,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${employee['email'] ?? 'غير محدد'}'),
-            Text('رقم الموظف: ${employee['employeeId'] ?? 'غير محدد'}'),
-            Text('الدور: ${_getRoleDisplayName(employee['role'])}'),
-            Text(
-              'النقاط: ${employee['points'] ?? 0}',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
+      // ======================= الخطوة 2: جعل البطاقة قابلة للضغط =======================
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  EmployeeDetailsScreen(employeeData: employee),
             ),
-          ],
-        ),
-        trailing: PopupMenuButton(
-          icon: const Icon(Icons.more_vert),
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              onTap: () => _toggleEmployeeStatus(employee['id'], isActive),
-              child: Row(
-                children: [
-                  Icon(isActive ? Icons.block : Icons.check_circle,
-                      color: isActive ? Colors.red : Colors.green),
-                  const SizedBox(width: 8),
-                  Text(isActive ? 'إلغاء التفعيل' : 'تفعيل'),
-                ],
-              ),
+          );
+        },
+        // ===========================================================================
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: _getRoleColor(employee['role']),
+            child: Text(
+              employee['fullName']?[0]?.toUpperCase() ?? '؟',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold),
             ),
-          ],
+          ),
+          title: Text(
+            employee['fullName'] ?? 'غير محدد',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isActive ? null : Colors.grey,
+              decoration: isActive ? null : TextDecoration.lineThrough,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${employee['email'] ?? 'غير محدد'}'),
+              Text('رقم الموظف: ${employee['employeeId'] ?? 'غير محدد'}'),
+              Text('الدور: ${_getRoleDisplayName(employee['role'])}'),
+              Text(
+                'النقاط: ${employee['points'] ?? 0}',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          trailing: PopupMenuButton(
+            icon: const Icon(Icons.more_vert),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                // تم تعديل onTap هنا ليعمل بشكل صحيح مع PopupMenuButton
+                onTap: () => WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _toggleEmployeeStatus(employee['id'], isActive);
+                }),
+                child: Row(
+                  children: [
+                    Icon(isActive ? Icons.block : Icons.check_circle,
+                        color: isActive ? Colors.red : Colors.green),
+                    const SizedBox(width: 8),
+                    Text(isActive ? 'إلغاء التفعيل' : 'تفعيل'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          tileColor: isActive ? null : Colors.grey[100],
         ),
-        tileColor: isActive ? null : Colors.grey[100],
       ),
     );
   }
@@ -335,7 +352,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           );
   }
 
-  // ====================== تم إصلاح الخطأ هنا ======================
   Widget _buildStatisticsTab() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
@@ -343,11 +359,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     final activeEmployees =
         _allEmployees.where((emp) => emp['isActive'] == true).length;
 
-    // تم التعديل هنا: تحويل القيمة إلى int بشكل آمن
     final totalPoints = _allEmployees.fold<int>(
         0, (sum, emp) => sum + ((emp['points'] ?? 0) as num).toInt());
 
-    // تم التعديل هنا: تحويل القيمة إلى int بشكل آمن
     final completedTasks = _allEmployees.fold<int>(
         0, (sum, emp) => sum + ((emp['tasksCompleted'] ?? 0) as num).toInt());
 
@@ -367,7 +381,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       ),
     );
   }
-  // =================================================================
 
   Widget _buildStatCard(String title, String value, IconData icon) {
     return Card(

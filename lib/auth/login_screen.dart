@@ -47,21 +47,45 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception('فشل تسجيل الدخول: المستخدم غير موجود.');
       }
 
-      // 2. التحقق من وجود مستند المستخدم في Firestore وإنشائه إذا لزم الأمر (خاصة للمدير الأول)
+      // 2. جلب مستند المستخدم من Firestore
       final userDocRef =
           FirebaseFirestore.instance.collection('users').doc(firebaseUser.uid);
       final userDoc = await userDocRef.get();
 
-      if (!userDoc.exists) {
-        // إذا كان هذا هو أول تسجيل دخول لـ admin@uqu.edu.sa
-        // ونحن متأكدون أنه حساب إداري يجب إنشاء مستنده
+      if (userDoc.exists) {
+        // ======================= الحل الأمني يبدأ هنا =======================
+        final userData = userDoc.data() as Map<String, dynamic>;
+        final bool isActive = userData['isActive'] ??
+            true; // القيمة الافتراضية true للحسابات القديمة
+
+        if (!isActive) {
+          // إذا كان الحساب غير نشط، قم بتسجيل الخروج فوراً
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            UIHelpers.showErrorSnackBar(
+                context, 'تم تعطيل هذا الحساب. يرجى التواصل مع المسؤول.');
+          }
+          debugPrint("❌ تم منع تسجيل الدخول: الحساب معطل.");
+          return; // منع المتابعة
+        }
+        // ======================== الحل الأمني ينتهي هنا ========================
+
+        // إذا كان الحساب نشطاً، استمر في العملية كالمعتاد
+        debugPrint("✅ تم تسجيل الدخول بنجاح.");
+        if (mounted) {
+          final userRoleString = userData['role'] as String? ?? 'guest';
+          UIHelpers.showSuccessSnackBar(context,
+              "مرحباً بك: ${userRoleFromString(userRoleString).displayName}");
+        }
+      } else {
+        // هذا الجزء يعالج حالة عدم وجود مستند للمستخدم
+        // (مهم بشكل خاص لأول تسجيل دخول للمدير)
         if (email.toLowerCase() == _adminEmail &&
             (await _firestoreCollectionIsEmpty('users'))) {
-          // هذا الشرط يعالج حالة أول "مدير" يدخل للنظام ويبني ملفه في Firestore
           final newAdminUser = UserAccountModel(
             uid: firebaseUser.uid,
             email: email,
-            fullName: 'مدير النظام', // اسم افتراضي للمدير
+            fullName: 'مدير النظام',
             role: UserRole.admin.name,
             createdAt: DateTime.now(),
             points: 0,
@@ -75,33 +99,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 context, "تم تسجيل الدخول كمدير النظام.");
           }
         } else {
-          // إذا لم يكن المستند موجودًا وليس هو "المدير الأول" الافتراضي،
-          // فهذا يعني أن الحساب غير مكتمل (لم يتم إنشاؤه بواسطة المدير).
-          // يجب تسجيل خروج المستخدم وإعلامه بالخطأ.
           await FirebaseAuth.instance.signOut();
           if (mounted) {
-            UIHelpers.showErrorSnackBar(context,
-                'بيانات حسابك غير مكتملة. يرجى التواصل مع المسؤول لإنشاء حساب لك.');
+            UIHelpers.showErrorSnackBar(
+                context, 'بيانات حسابك غير مكتملة. يرجى التواصل مع المسؤول.');
           }
           debugPrint(
               "❌ بيانات المستخدم غير موجودة في Firestore. تم تسجيل الخروج.");
-          return; // منع المتابعة
-        }
-      } else {
-        // إذا كان المستند موجودًا بالفعل، فقط أظهر رسالة ترحيب.
-        debugPrint("✅ تم تسجيل الدخول بنجاح.");
-        if (mounted) {
-          final userData = userDoc.data() as Map<String, dynamic>;
-          final userRoleString = userData['role'] as String? ?? 'guest';
-          UIHelpers.showSuccessSnackBar(context,
-              "مرحباً بك: ${userRoleFromString(userRoleString).displayName}");
+          return;
         }
       }
-
-      // *** لا تفعل أي Navigator.pop() هنا. AuthWrapper هو المسؤول عن التوجيه. ***
-      // بمجرد أن يتم تسجيل الدخول بنجاح وضمان وجود مستند المستخدم،
-      // سيكتشف StreamBuilder في AuthWrapper التغيير في حالة المصادقة
-      // وسيتم التوجيه إلى UpdatedHomeScreen تلقائيًا.
+      // AuthWrapper سيتولى التوجيه تلقائياً
     } on FirebaseAuthException catch (e) {
       _handleFirebaseAuthError(e);
     } catch (e) {
@@ -114,7 +122,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // دالة مساعدة للتحقق مما إذا كانت مجموعة Firestore فارغة
   Future<bool> _firestoreCollectionIsEmpty(String collectionName) async {
     final QuerySnapshot snapshot = await FirebaseFirestore.instance
         .collection(collectionName)

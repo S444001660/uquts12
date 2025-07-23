@@ -1,9 +1,7 @@
-// screens/admin/reports_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/permissions_service.dart';
-import '../../services/task_progress_service.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -22,7 +20,6 @@ class _ReportsScreenState extends State<ReportsScreen>
   Map<String, int> _devicesByCollege = {};
   Map<String, int> _labsByStatus = {};
   Map<String, int> _devicesByTimePeriod = {};
-  List<Map<String, dynamic>> _topEmployees = [];
   List<Map<String, dynamic>> _recentActivities = [];
 
   // Controllers and filters
@@ -37,7 +34,8 @@ class _ReportsScreenState extends State<ReportsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    // ======================= التعديل الأول: تم تغيير عدد التبويبات إلى 3 =======================
+    _tabController = TabController(length: 3, vsync: this);
     _initializeScreen();
   }
 
@@ -65,7 +63,6 @@ class _ReportsScreenState extends State<ReportsScreen>
     });
 
     try {
-      // Optimized data fetching: Fetch all collections once
       if (_deviceDocs == null || _labDocs == null || _userDocs == null) {
         final results = await Future.wait([
           FirebaseFirestore.instance.collection('devices').get(),
@@ -79,11 +76,9 @@ class _ReportsScreenState extends State<ReportsScreen>
         _userDocs = results[2].docs;
       }
 
-      final topEmployees = await TaskProgressService.getTopEmployees(limit: 10);
+      // ======================= تم حذف جلب بيانات أفضل الموظفين من هنا =======================
 
-      // Process the fetched data
       _processAllStats();
-      _topEmployees = topEmployees;
     } catch (e) {
       if (mounted) {
         setState(() => _error = 'خطأ في تحميل البيانات: $e');
@@ -104,7 +99,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     _processRecentActivities(_deviceDocs!);
   }
 
-  // --- Data Processing Functions ---
+  // --- Data Processing Functions (No changes here) ---
 
   void _processGeneralStats(List<QueryDocumentSnapshot> devices,
       List<QueryDocumentSnapshot> labs, List<QueryDocumentSnapshot> users) {
@@ -290,10 +285,10 @@ class _ReportsScreenState extends State<ReportsScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           isScrollable: true,
+          // ======================= التعديل الثاني: تم حذف تبويب أفضل الموظفين =======================
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'نظرة عامة'),
             Tab(icon: Icon(Icons.bar_chart), text: 'الرسوم البيانية'),
-            Tab(icon: Icon(Icons.people), text: 'أفضل الموظفين'),
             Tab(icon: Icon(Icons.history), text: 'النشاطات الأخيرة'),
           ],
         ),
@@ -311,10 +306,10 @@ class _ReportsScreenState extends State<ReportsScreen>
               ? Center(child: Text(_error!))
               : TabBarView(
                   controller: _tabController,
+                  // ======================= التعديل الثالث: تم حذف عرض تبويب أفضل الموظفين =======================
                   children: [
                     _buildOverviewTab(),
                     _buildChartsTab(),
-                    _buildTopEmployeesTab(),
                     _buildActivitiesTab(),
                   ],
                 ),
@@ -459,52 +454,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     );
   }
 
-  Widget _buildTopEmployeesTab() {
-    if (_topEmployees.isEmpty) {
-      return const Center(child: Text('لا يوجد بيانات لعرضها'));
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _topEmployees.length,
-      itemBuilder: (context, index) {
-        final employee = _topEmployees[index];
-        final rank = index + 1;
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: _getRankColor(rank),
-              child: Text(
-                '$rank',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            title: Text(employee['fullName'] ?? 'غير محدد'),
-            subtitle:
-                Text('المهام المكتملة: ${employee['tasksCompleted'] ?? 0}'),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${employee['points'] ?? 0}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.amber,
-                  ),
-                ),
-                const Text('نقطة',
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // ======================= تم حذف دالة بناء تبويب أفضل الموظفين بالكامل =======================
 
   Widget _buildActivitiesTab() {
     if (_recentActivities.isEmpty) {
@@ -531,6 +481,8 @@ class _ReportsScreenState extends State<ReportsScreen>
       },
     );
   }
+
+  // --- Helper and Builder Widgets (No changes here, except removed unused ones) ---
 
   Widget _buildStatCard({
     required String title,
@@ -837,18 +789,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     }
   }
 
-  Color _getRankColor(int rank) {
-    switch (rank) {
-      case 1:
-        return Colors.amber;
-      case 2:
-        return Colors.grey[600]!;
-      case 3:
-        return Colors.brown;
-      default:
-        return Colors.blue;
-    }
-  }
+  // ======================= تم حذف دالة _getRankColor لعدم استخدامها =======================
 
   String _getTimeAgo(DateTime dateTime) {
     final difference = DateTime.now().difference(dateTime);

@@ -1,11 +1,15 @@
-// services/task_progress_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:developer';
+
+// استيراد الموديلات مع إعطاء اسم مميز للثاني لتجنب التضارب
 import '../models/task_model.dart';
+import '../models/user_task_model.dart'
+    as user_task_model; // <--- الحل الأول: إضافة اسم مميز
 
 class TaskProgressService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// يتم استدعاؤها بعد إضافة جهاز جديد لتحديث المهام المتعلقة
+  /// يتم استدعاؤها بعد إضافة جهاز جديد لتحديث تقدم المهام المتعلقة
   static Future<void> updateDeviceRegistrationProgress(String userId) async {
     try {
       final userTasksQuery = await _firestore
@@ -15,7 +19,9 @@ class TaskProgressService {
           .get();
 
       for (final userTaskDoc in userTasksQuery.docs) {
-        final userTask = UserTaskModel.fromMap(userTaskDoc.data());
+        // استخدام الاسم المميز للوصول إلى الموديل الصحيح
+        final userTask =
+            user_task_model.UserTaskModel.fromMap(userTaskDoc.data());
         final taskDoc =
             await _firestore.collection('tasks').doc(userTask.taskId).get();
 
@@ -23,6 +29,7 @@ class TaskProgressService {
         final mainTask = TaskModel.fromMap(taskDoc.data()!);
 
         if (mainTask.type == 'deviceRegistration') {
+          // --- الحل الثاني: حذف .toDate() لأن createdAt هو بالفعل DateTime ---
           final devicesCount =
               await _getDevicesRegisteredByUser(userId, mainTask.createdAt);
           final isCompleted = devicesCount >= (mainTask.targetCount ?? 1);
@@ -40,24 +47,23 @@ class TaskProgressService {
         }
       }
     } catch (e) {
-      print('Error in updateDeviceRegistrationProgress: $e');
+      log('Error in updateDeviceRegistrationProgress: $e');
     }
   }
 
-  /// جلب مهام المستخدم النشطة (الدالة التي كانت مفقودة)
-  static Future<List<Map<String, dynamic>>> getTasksAssignedByUser(
+  /// جلب المهام التي أنشأها أدمن معين
+  static Future<List<Map<String, dynamic>>> getTasksAssignedByAdmin(
       String adminId) async {
     try {
-      // 1. جلب المهام التي أنشأها الأدمن
-      final tasksSnapshot = await FirebaseFirestore.instance
+      final tasksSnapshot = await _firestore
           .collection('tasks')
-          .where('assignedBy', isEqualTo: adminId)
+          .where('createdBy', isEqualTo: adminId)
           .get();
 
       List<Map<String, dynamic>> result = [];
 
       for (final taskDoc in tasksSnapshot.docs) {
-        final userTasksSnapshot = await FirebaseFirestore.instance
+        final userTasksSnapshot = await _firestore
             .collection('user_tasks')
             .where('taskId', isEqualTo: taskDoc.id)
             .get();
@@ -69,14 +75,14 @@ class TaskProgressService {
           });
         }
       }
-
       return result;
     } catch (e) {
-      print('Error loading assigned tasks by admin: $e');
+      log('Error loading assigned tasks by admin: $e');
       return [];
     }
   }
 
+  /// جلب المهام النشطة لمستخدم معين
   static Future<List<Map<String, dynamic>>> getUserActiveTasks(
       String userId) async {
     try {
@@ -102,10 +108,9 @@ class TaskProgressService {
           'userTask': userTaskData,
         });
       }
-
       return result;
     } catch (e) {
-      print('Error loading user active tasks: $e');
+      log('Error loading user active tasks: $e');
       return [];
     }
   }
@@ -135,7 +140,7 @@ class TaskProgressService {
         };
       }).toList();
     } catch (e) {
-      print('Error getting top employees: $e');
+      log('Error getting top employees: $e');
       return [];
     }
   }
@@ -162,18 +167,20 @@ class TaskProgressService {
     int totalProgress = 0;
     int completedCount = 0;
     for (var doc in userTasksQuery.docs) {
-      final userTask = UserTaskModel.fromMap(doc.data());
+      // استخدام الاسم المميز للوصول إلى الموديل الصحيح
+      final userTask = user_task_model.UserTaskModel.fromMap(doc.data());
       totalProgress += userTask.progress;
       if (userTask.isCompleted) {
         completedCount++;
       }
     }
 
-    final allTasksCompleted = completedCount == userTasksQuery.docs.length;
+    final allAssignedTasksCompleted =
+        completedCount == userTasksQuery.docs.length;
     await _firestore.collection('tasks').doc(taskId).update({
       'currentCount': totalProgress,
-      'isCompleted': allTasksCompleted,
-      'completedAt': allTasksCompleted ? Timestamp.now() : null,
+      'isCompleted': allAssignedTasksCompleted,
+      'completedAt': allAssignedTasksCompleted ? Timestamp.now() : null,
     });
   }
 

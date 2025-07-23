@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../utils/ui_helpers.dart'; // استيراد UIHelpers
+import 'package:firebase_core/firebase_core.dart'; // <-- استيراد ضروري للحل
+import '../../utils/ui_helpers.dart';
 
 class CreateUserScreen extends StatefulWidget {
   const CreateUserScreen({super.key});
@@ -31,37 +32,46 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     super.dispose();
   }
 
+  // ======================= الحل يبدأ هنا =======================
   Future<void> _createUser() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
     setState(() => _isLoading = true);
-    final adminUid = FirebaseAuth.instance.currentUser?.uid;
-    if (adminUid == null) {
+    final admin = FirebaseAuth.instance.currentUser;
+    if (admin == null) {
       UIHelpers.showErrorSnackBar(context, "خطأ: المدير غير مسجل دخوله.");
       setState(() => _isLoading = false);
       return;
     }
 
+    // 1. إنشاء اسم فريد للتطبيق الثانوي لتجنب التضارب
+    String secondaryAppName =
+        'userCreation-${DateTime.now().millisecondsSinceEpoch}';
+    FirebaseApp? secondaryApp;
+
     try {
-      // 1. إنشاء حساب المستخدم الجديد في Firebase Authentication
+      // 2. تهيئة التطبيق الثانوي بنفس إعدادات التطبيق الرئيسي
+      secondaryApp = await Firebase.initializeApp(
+        name: secondaryAppName,
+        options: Firebase.app().options,
+      );
+
+      // 3. إنشاء المستخدم الجديد باستخدام التطبيق الثانوي المعزول
       final UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          await FirebaseAuth.instanceFor(app: secondaryApp)
+              .createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
       final newUser = userCredential.user;
       if (newUser != null) {
-        // 2. حفظ بيانات المستخدم الجديد في Firestore
-        // هذا يضمن وجود مستند المستخدم في Firestore فور إنشائه
-        await _saveUserToFirestore(newUser.uid, adminUid);
-        await newUser.updateDisplayName(_fullNameController.text.trim());
-
-        // لا تقم بتسجيل خروج المستخدم الحالي (المدير) هنا.
-        // يجب أن يبقى المدير مسجل الدخول بعد إنشاء حساب جديد.
-        // await FirebaseAuth.instance.signOut(); // هذا السطر يجب أن يكون محذوفًا أو معلقًا
+        // 4. حفظ بيانات المستخدم الجديد في Firestore كالمعتاد
+        await _saveUserToFirestore(newUser.uid, admin.uid);
+        // يمكنك تحديث اسم العرض إذا أردت، ولكن هذا اختياري
+        // await newUser.updateDisplayName(_fullNameController.text.trim());
 
         if (mounted) {
           UIHelpers.showSuccessSnackBar(
@@ -75,11 +85,16 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       UIHelpers.showErrorSnackBar(
           context, 'حدث خطأ غير متوقع: ${e.toString()}');
     } finally {
+      // 5. حذف التطبيق الثانوي لعدم ترك أي أثر وتنظيف الموارد
+      if (secondaryApp != null) {
+        await secondaryApp.delete();
+      }
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
+  // ======================== الحل ينتهي هنا ========================
 
   Future<void> _saveUserToFirestore(String newUserUid, String adminUid) async {
     final userData = {
@@ -95,8 +110,10 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       'tasksCompleted': 0,
       'devicesRegistered': 0,
     };
-    await FirebaseFirestore.instance.collection('users').doc(newUserUid).set(
-        userData); // استخدام set() بدلاً من update() لضمان الإنشاء إذا لم يكن موجوداً
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(newUserUid)
+        .set(userData);
   }
 
   void _handleFirebaseAuthError(FirebaseAuthException e) {

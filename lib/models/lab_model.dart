@@ -61,6 +61,8 @@ class LabModel {
   /// إحداثيات الموقع - خط الطول.
   final double? longitude;
 
+  final String? createdBy;
+
   //------------------------------------------------------------------------------
 
   /// البناء (Constructor) لإنشاء كائن جديد من نوع LabModel.
@@ -80,6 +82,7 @@ class LabModel {
     this.locationUrl,
     this.latitude,
     this.longitude,
+    this.createdBy,
   });
 
   //------------------------------------------------------------------------------
@@ -105,6 +108,7 @@ class LabModel {
       'locationUrl': locationUrl,
       'latitude': latitude,
       'longitude': longitude,
+      'createdBy': createdBy,
     };
   }
 
@@ -143,6 +147,7 @@ class LabModel {
       locationUrl: map['locationUrl'] as String?,
       latitude: map['latitude'] as double?,
       longitude: map['longitude'] as double?,
+      createdBy: map['createdBy'] as String?,
     );
   }
 
@@ -166,6 +171,7 @@ class LabModel {
     String? locationUrl,
     double? latitude,
     double? longitude,
+    String? createdBy,
   }) {
     return LabModel(
       id: id ?? this.id,
@@ -183,6 +189,8 @@ class LabModel {
       locationUrl: locationUrl ?? this.locationUrl,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      createdBy: createdBy ?? this.createdBy,
+
     );
   }
 
