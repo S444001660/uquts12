@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 // استيرادات Firebase الضرورية
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 
 // استيراد الشاشة التي سيبدأ منها التطبيق (الآن هي AuthWrapper)
 import 'package:uquts1/auth/auth_wrapper.dart'; // <--- تم التغيير هنا

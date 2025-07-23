@@ -1,6 +1,5 @@
 // screens/updated_home_screen.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/permissions_service.dart';
 import '../services/task_progress_service.dart';
 import '../models/lab_model.dart';

@@ -2,8 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/permissions_service.dart';
-import '../models/task_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 enum TaskType { inspection, setup, maintenance, deviceRegistration, other }
