@@ -24,8 +24,7 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
         title: const Text('مهامي'),
       ),
       body: userId == null
-          ? const Center(
-              child: Text('المستخدم غير مسجل دخوله. يرجى إعادة تسجيل الدخول.'))
+          ? const Center(child: Text('المستخدم غير مسجل دخوله. يرجى إعادة تسجيل الدخول.'))
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('user_tasks')
@@ -49,10 +48,9 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
                   itemBuilder: (context, index) {
                     final userTaskDoc = snapshot.data!.docs[index];
                     // استخدام الاسم المميز للوصول إلى الموديل الصحيح
-                    final userTask =
-                        user_task_model.UserTaskModel.fromMap(// <--- الحل هنا
-                            userTaskDoc.data() as Map<String, dynamic>);
-
+                    final userTask = user_task_model.UserTaskModel.fromMap( // <--- الحل هنا
+                        userTaskDoc.data() as Map<String, dynamic>);
+                    
                     return _buildTaskCard(userTask);
                   },
                 );
@@ -62,8 +60,7 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
   }
 
   // استخدام الاسم المميز في نوع المتغير
-  Widget _buildTaskCard(user_task_model.UserTaskModel userTask) {
-    // <--- الحل هنا
+  Widget _buildTaskCard(user_task_model.UserTaskModel userTask) { // <--- الحل هنا
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('tasks')
@@ -97,8 +94,7 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
           elevation: 3,
           margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
           child: ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             title: Text(
               task.typeDisplayName,
               style: const TextStyle(fontWeight: FontWeight.bold),
@@ -112,9 +108,7 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
               ),
             ),
             trailing: Icon(
-              userTask.isCompleted
-                  ? Icons.check_circle
-                  : Icons.hourglass_top_rounded,
+              userTask.isCompleted ? Icons.check_circle : Icons.hourglass_top_rounded,
               color: userTask.isCompleted ? Colors.green : Colors.orange,
               size: 28,
             ),

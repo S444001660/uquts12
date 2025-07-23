@@ -1,13 +1,46 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer';
-
-// استيراد الموديلات مع إعطاء اسم مميز للثاني لتجنب التضارب
 import '../models/task_model.dart';
-import '../models/user_task_model.dart'
-    as user_task_model; // <--- الحل الأول: إضافة اسم مميز
+import '../models/user_task_model.dart' as user_task_model;
 
 class TaskProgressService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// يتم استدعاؤها عند إكمال مهمة يدوياً (ليست تسجيل جهاز)
+  static Future<void> completeManualTask({
+    required String userId,
+    required String taskId,
+    required String userTaskId,
+    String? completionNote,
+    String? proofImageUrl,
+  }) async {
+    try {
+      final userTaskRef = _firestore.collection('user_tasks').doc(userTaskId);
+      final taskDocRef = _firestore.collection('tasks').doc(taskId);
+
+      // 1. تحديث المهمة الفرعية للمستخدم
+      await userTaskRef.update({
+        'isCompleted': true,
+        'completedAt': Timestamp.now(),
+        'completionNote': completionNote,
+        'proofImages': proofImageUrl != null ? [proofImageUrl] : [],
+      });
+
+      // 2. جلب المهمة الرئيسية لإضافة النقاط
+      final taskDoc = await taskDocRef.get();
+      if (taskDoc.exists) {
+        final mainTask = TaskModel.fromMap(taskDoc.data()!);
+        // 3. إضافة النقاط وزيادة عداد المهام المكتملة للمستخدم
+        await _addPointsToUser(userId, _calculateTaskPoints(mainTask));
+      }
+
+      // 4. تحديث حالة المهمة الرئيسية (هل اكتملت بالكامل أم لا)
+      await _updateMainTaskStatus(taskId);
+    } catch (e) {
+      log('Error in completeManualTask: $e');
+      rethrow; // إعادة رمي الخطأ لمعالجته في واجهة المستخدم
+    }
+  }
 
   /// يتم استدعاؤها بعد إضافة جهاز جديد لتحديث تقدم المهام المتعلقة
   static Future<void> updateDeviceRegistrationProgress(String userId) async {
@@ -19,7 +52,6 @@ class TaskProgressService {
           .get();
 
       for (final userTaskDoc in userTasksQuery.docs) {
-        // استخدام الاسم المميز للوصول إلى الموديل الصحيح
         final userTask =
             user_task_model.UserTaskModel.fromMap(userTaskDoc.data());
         final taskDoc =
@@ -29,7 +61,6 @@ class TaskProgressService {
         final mainTask = TaskModel.fromMap(taskDoc.data()!);
 
         if (mainTask.type == 'deviceRegistration') {
-          // --- الحل الثاني: حذف .toDate() لأن createdAt هو بالفعل DateTime ---
           final devicesCount =
               await _getDevicesRegisteredByUser(userId, mainTask.createdAt);
           final isCompleted = devicesCount >= (mainTask.targetCount ?? 1);
@@ -51,38 +82,66 @@ class TaskProgressService {
     }
   }
 
-  /// جلب المهام التي أنشأها أدمن معين
-  static Future<List<Map<String, dynamic>>> getTasksAssignedByAdmin(
-      String adminId) async {
-    try {
-      final tasksSnapshot = await _firestore
-          .collection('tasks')
-          .where('createdBy', isEqualTo: adminId)
-          .get();
+  // ======================= هذه هي الدالة التي تم تصحيحها بالكامل =======================
+  static Future<void> _updateMainTaskStatus(String taskId) async {
+    // 1. ابحث عن أي مهمة فرعية "غير مكتملة" مرتبطة بالمهمة الرئيسية.
+    final incompleteTasksQuery = await _firestore
+        .collection('user_tasks')
+        .where('taskId', isEqualTo: taskId)
+        .where('isCompleted', isEqualTo: false)
+        .limit(1) // نحتاج فقط لمعرفة ما إذا كانت هناك واحدة على الأقل.
+        .get();
 
-      List<Map<String, dynamic>> result = [];
+    // 2. إذا لم يتم العثور على أي مهمة غير مكتملة، فهذا يعني أن المهمة الرئيسية قد اكتملت.
+    final bool allTasksCompleted = incompleteTasksQuery.docs.isEmpty;
 
-      for (final taskDoc in tasksSnapshot.docs) {
-        final userTasksSnapshot = await _firestore
-            .collection('user_tasks')
-            .where('taskId', isEqualTo: taskDoc.id)
-            .get();
-
-        for (final userTaskDoc in userTasksSnapshot.docs) {
-          result.add({
-            'mainTask': taskDoc.data(),
-            'userTask': userTaskDoc.data(),
-          });
-        }
+    // (اختياري ولكن جيد) حساب التقدم الإجمالي لمهام تسجيل الأجهزة
+    int totalProgress = 0;
+    final allUserTasksQuery = await _firestore
+        .collection('user_tasks')
+        .where('taskId', isEqualTo: taskId)
+        .get();
+    if (allUserTasksQuery.docs.isNotEmpty) {
+      for (var doc in allUserTasksQuery.docs) {
+        final data = doc.data();
+        totalProgress += (data['progress'] ?? 0) as int;
       }
-      return result;
-    } catch (e) {
-      log('Error loading assigned tasks by admin: $e');
-      return [];
     }
+
+    // 3. تحديث مستند المهمة الرئيسية بالحالة الصحيحة.
+    await _firestore.collection('tasks').doc(taskId).update({
+      'isCompleted': allTasksCompleted,
+      'completedAt': allTasksCompleted ? Timestamp.now() : null,
+      'currentCount': totalProgress,
+    });
+  }
+  // =================================================================================
+
+  static Future<void> _addPointsToUser(String userId, int points) async {
+    await _firestore.collection('users').doc(userId).update({
+      'points': FieldValue.increment(points),
+      'tasksCompleted':
+          FieldValue.increment(1), // <-- هنا يتم زيادة عداد المهام
+    });
   }
 
-  /// جلب المهام النشطة لمستخدم معين
+  static int _calculateTaskPoints(TaskModel task) {
+    if (task.type == 'deviceRegistration') {
+      return (task.targetCount ?? 1) * 5;
+    }
+    return 10;
+  }
+
+  static Future<int> _getDevicesRegisteredByUser(
+      String userId, DateTime since) async {
+    final query = await _firestore
+        .collection('devices')
+        .where('createdBy', isEqualTo: userId)
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
+        .get();
+    return query.docs.length;
+  }
+
   static Future<List<Map<String, dynamic>>> getUserActiveTasks(
       String userId) async {
     try {
@@ -113,88 +172,5 @@ class TaskProgressService {
       log('Error loading user active tasks: $e');
       return [];
     }
-  }
-
-  /// جلب أفضل الموظفين حسب النقاط
-  static Future<List<Map<String, dynamic>>> getTopEmployees(
-      {int limit = 10}) async {
-    try {
-      final usersQuery = await _firestore
-          .collection('users')
-          .where('role', whereIn: ['technician', 'supervisor'])
-          .orderBy('points', descending: true)
-          .limit(limit)
-          .get();
-
-      return usersQuery.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'fullName': data['fullName'] ?? 'غير محدد',
-          'employeeId': data['employeeId'] ?? '',
-          'points': data['points'] ?? 0,
-          'tasksCompleted': data['tasksCompleted'] ?? 0,
-          'devicesRegistered': data['devicesRegistered'] ?? 0,
-          'department': data['department'] ?? '',
-          'role': data['role'] ?? 'technician',
-        };
-      }).toList();
-    } catch (e) {
-      log('Error getting top employees: $e');
-      return [];
-    }
-  }
-
-  // --- دوال مساعدة خاصة ---
-
-  static Future<int> _getDevicesRegisteredByUser(
-      String userId, DateTime since) async {
-    final query = await _firestore
-        .collection('devices')
-        .where('createdBy', isEqualTo: userId)
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
-        .get();
-    return query.docs.length;
-  }
-
-  static Future<void> _updateMainTaskStatus(String taskId) async {
-    final userTasksQuery = await _firestore
-        .collection('user_tasks')
-        .where('taskId', isEqualTo: taskId)
-        .get();
-    if (userTasksQuery.docs.isEmpty) return;
-
-    int totalProgress = 0;
-    int completedCount = 0;
-    for (var doc in userTasksQuery.docs) {
-      // استخدام الاسم المميز للوصول إلى الموديل الصحيح
-      final userTask = user_task_model.UserTaskModel.fromMap(doc.data());
-      totalProgress += userTask.progress;
-      if (userTask.isCompleted) {
-        completedCount++;
-      }
-    }
-
-    final allAssignedTasksCompleted =
-        completedCount == userTasksQuery.docs.length;
-    await _firestore.collection('tasks').doc(taskId).update({
-      'currentCount': totalProgress,
-      'isCompleted': allAssignedTasksCompleted,
-      'completedAt': allAssignedTasksCompleted ? Timestamp.now() : null,
-    });
-  }
-
-  static Future<void> _addPointsToUser(String userId, int points) async {
-    await _firestore.collection('users').doc(userId).update({
-      'points': FieldValue.increment(points),
-      'tasksCompleted': FieldValue.increment(1),
-    });
-  }
-
-  static int _calculateTaskPoints(TaskModel task) {
-    if (task.type == 'deviceRegistration') {
-      return (task.targetCount ?? 1) * 5; // 5 نقاط لكل جهاز
-    }
-    return 10; // نقاط افتراضية للمهام الأخرى
   }
 }

@@ -1,11 +1,10 @@
-// screens/updated_home_screen.dart
 import 'package:flutter/material.dart';
 import '../services/permissions_service.dart';
 import '../services/task_progress_service.dart';
 import '../models/lab_model.dart';
 import '../models/device_model.dart';
 import '../models/user_account_model.dart';
-import '../models/user_role_model.dart'; // <--- استيراد الملف الجديد
+import '../models/user_role_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'add_lab_screen.dart';
@@ -14,15 +13,17 @@ import 'barcode_scanner_screen.dart';
 import 'settings_screen.dart';
 import 'labs_list_screen.dart';
 import 'devices_list_screen.dart';
-import 'admin/employee_management_screen.dart'; // تأكد من المسار الصحيح
+import 'admin/employee_management_screen.dart';
 import 'admin/reports_screen.dart';
+import 'admin/admin_tasks_history_screen.dart'; // <-- 1. استيراد شاشة سجل المهام
+import 'admin/admin_task_details_screen.dart'; // استيراد شاشة تفاصيل الأدمن
 import 'add_task.dart';
 import 'user_tasks_screen.dart';
 import '../services/firebase_database_service.dart';
 import 'task_details_screen.dart';
 import 'lab_details_screen.dart';
 import 'view_device_screen.dart';
-import '../screens/technician_stats_screen.dart'; // <--- جديد
+import '../screens/technician_stats_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class UpdatedHomeScreen extends StatefulWidget {
@@ -48,7 +49,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   @override
   void initState() {
     super.initState();
-    fetchAdminAssignedTasks();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
@@ -69,14 +69,12 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     });
 
     try {
-      // تحميل معلومات المستخدم والصلاحيات
       _currentUser = await PermissionsService.getCurrentUserInfo();
       _currentUserRole = await PermissionsService.getCurrentUserRole();
 
-      // تحميل البيانات بناءً على الدور
       await Future.wait([
         _loadRecentActivities(),
-        _loadUserTasks(),
+        _loadTasksForHomeScreen(),
       ]);
 
       if (mounted) {
@@ -92,20 +90,31 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     }
   }
 
-  Future<void> fetchAdminAssignedTasks() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('tasks')
-        .where('createdBy', isEqualTo: currentUserId)
-        .get();
+  // دالة واحدة لجلب المهام بناءً على دور المستخدم
+  Future<void> _loadTasksForHomeScreen() async {
+    if (_currentUser == null) return;
 
-    setState(() {
-      assignedTasks = snapshot.docs
-          .map((doc) => {
-                'taskId': doc.id,
-                ...doc.data(),
-              })
-          .toList();
-    });
+    try {
+      List<Map<String, dynamic>> tasks = [];
+      if (_currentUserRole == UserRole.technician) {
+        // الفني يرى مهامه النشطة
+        tasks = await TaskProgressService.getUserActiveTasks(_currentUser!.uid);
+        if (mounted) setState(() => _userTasks = tasks);
+      } else {
+        // الأدمن والمشرف يرون آخر 5 مهام قاموا بإنشائها
+        final snapshot = await FirebaseFirestore.instance
+            .collection('tasks')
+            .where('createdBy', isEqualTo: currentUserId)
+            .orderBy('createdAt', descending: true)
+            .limit(5) // <-- 2. تحديد عدد المهام بـ 5 فقط
+            .get();
+        tasks =
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+        if (mounted) setState(() => assignedTasks = tasks);
+      }
+    } catch (e) {
+      debugPrint('خطأ في تحميل المهام للشاشة الرئيسية: $e');
+    }
   }
 
   Future<void> _loadRecentActivities() async {
@@ -114,7 +123,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         await FirebaseDatabaseService.getDevices();
     List<RecentActivity> allActivities = [];
 
-    // دالة داخلية لجلب اسم المستخدم
     Future<String?> _getUserName(String? uid) async {
       if (uid == null) return null;
       final userDoc =
@@ -151,22 +159,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       setState(() {
         _recentActivities = allActivities.take(5).toList();
       });
-    }
-  }
-
-  Future<void> _loadUserTasks() async {
-    if (_currentUser == null) return;
-
-    try {
-      final tasks =
-          await TaskProgressService.getUserActiveTasks(_currentUser!.uid);
-      if (mounted) {
-        setState(() {
-          _userTasks = tasks;
-        });
-      }
-    } catch (e) {
-      print('خطأ في تحميل المهام: $e');
     }
   }
 
@@ -377,7 +369,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   Widget _buildActionButtons() {
     List<_HomeButton> buttons = [];
 
-    // أزرار للجميع
     buttons.addAll([
       _HomeButton(Icons.add_business_outlined, 'إضافة معمل',
           () => _navigateAndReload(const AddLabScreen())),
@@ -385,7 +376,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
           () => _navigateAndReload(const AddDeviceScreen())),
     ]);
 
-    // أدمن ومشرف
     if (_currentUserRole == UserRole.admin ||
         _currentUserRole == UserRole.supervisor) {
       buttons.add(_HomeButton(Icons.assignment_add, 'إسناد مهمة',
@@ -397,6 +387,9 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
               () => _navigateAndReload(const EmployeeManagementScreen())),
           _HomeButton(Icons.analytics, 'التقارير',
               () => _navigateAndReload(const ReportsScreen())),
+          // <-- 3. إضافة الزر الجديد هنا
+          _HomeButton(Icons.history, 'سجل المهام',
+              () => _navigateAndReload(const AdminTasksHistoryScreen())),
         ]);
       }
     }
@@ -429,43 +422,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
             }).toList(),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    return SizedBox(
-      width: (MediaQuery.of(context).size.width - 64) /
-          4, // يجعلها 4 أزرار في الصف
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 28, color: theme.colorScheme.primary),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -512,102 +468,21 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   }
 
   Widget _buildUserTasksList(ThemeData theme) {
+    if (_userTasks.isEmpty) {
+      return const Center(child: Text('لا توجد مهام نشطة حالياً.'));
+    }
     return ListView.separated(
       itemCount: _userTasks.length,
       itemBuilder: (context, index) {
         final taskData = _userTasks[index];
         final mainTask = taskData['mainTask'];
         final userTask = taskData['userTask'];
-
-        final progress =
-            mainTask['targetCount'] != null && mainTask['targetCount'] > 0
-                ? (userTask['progress'] / mainTask['targetCount'] * 100)
-                    .clamp(0, 100)
-                : (userTask['isCompleted'] ? 100.0 : 0.0);
-
-        final String title = mainTask['typeDisplayName'] ?? 'مهمة';
-        final String? college = mainTask['college'];
-        final String? target = mainTask['targetCount'] != null
-            ? '${userTask['progress']}/${mainTask['targetCount']}'
-            : null;
-
-        return InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => TaskDetailsScreen(
-                  taskId: mainTask['id'],
-                  userTaskId: userTask['id'],
-                ),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            child: Row(
-              children: [
-                const Icon(Icons.chevron_left,
-                    color: Colors.grey), // السهم يسار
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.end, // ✅ يجعل كل العناصر تلتصق يمين
-                    children: [
-                      Align(
-                        alignment: Alignment
-                            .centerRight, // ✅ يجعل العنوان على أقصى اليمين
-                        child: Text(
-                          title,
-                          style: theme.textTheme.titleMedium,
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
-                      if (college != null)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            'الكلية: $college',
-                            textAlign: TextAlign.right,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                      if (target != null)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            'التقدم: $target',
-                            textAlign: TextAlign.right,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                      const SizedBox(height: 4),
-                      Directionality(
-                        textDirection: TextDirection.rtl,
-                        child: LinearProgressIndicator(
-                          value: progress / 100,
-                          backgroundColor: Colors.grey[300],
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            userTask['isCompleted']
-                                ? Colors.green
-                                : theme.colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-                CircleAvatar(
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-                  child:
-                      Icon(Icons.assignment, color: theme.colorScheme.primary),
-                ), // الأيقونة يمين
-              ],
-            ),
-          ),
+        return ListTile(
+          title: Text(mainTask['typeDisplayName'] ?? 'مهمة'),
+          onTap: () => _navigateAndReload(TaskDetailsScreen(
+            taskId: mainTask['id'],
+            userTaskId: userTask['id'],
+          )),
         );
       },
       separatorBuilder: (context, index) =>
@@ -616,57 +491,30 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   }
 
   Widget _buildAdminAssignedTasksList(ThemeData theme) {
-    return assignedTasks.isEmpty
-        ? const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.assignment_turned_in_outlined,
-                    size: 50, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('لا توجد مهام مسندة',
-                    style: TextStyle(fontSize: 18, color: Colors.grey)),
-              ],
-            ),
-          )
-        : ListView.separated(
-            itemCount: assignedTasks.length,
-            separatorBuilder: (context, index) =>
-                const Divider(height: 1, indent: 16, endIndent: 16),
-            itemBuilder: (context, index) {
-              final task = assignedTasks[index];
-              return ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                leading: const Icon(Icons.chevron_left, color: Colors.grey),
-                title: Text(task['typeDisplayName'] ?? 'مهمة',
-                    style: theme.textTheme.titleMedium,
-                    textAlign: TextAlign.right),
-                subtitle: Text(
-                  task['notes'] ?? '',
-                  textAlign: TextAlign.right,
-                  style: theme.textTheme.bodySmall,
-                ),
-                trailing: CircleAvatar(
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-                  child: Icon(Icons.assignment_outlined,
-                      color: theme.colorScheme.primary),
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TaskDetailsScreen(
-                        taskId: task['taskId'],
-                        userTaskId: task['userTaskId'],
-                        isAdminView: true,
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          );
+    if (assignedTasks.isEmpty) {
+      return const Center(child: Text('لم تقم بإسناد أي مهام مؤخراً.'));
+    }
+    return ListView.separated(
+      itemCount: assignedTasks.length,
+      separatorBuilder: (context, index) =>
+          const Divider(height: 1, indent: 16, endIndent: 16),
+      itemBuilder: (context, index) {
+        final task = assignedTasks[index];
+        return ListTile(
+          title: Text(task['typeDisplayName'] ?? 'مهمة'),
+          subtitle: Text(task['notes'] ?? 'لا توجد ملاحظات',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AdminTaskDetailsScreen(task: task),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildActivitiesList(ThemeData theme) {
@@ -752,9 +600,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     );
   }
 
-  // =======================================================================
-  // تم نقل الدالة هنا لحل مشكلة عدم العثور على 'context'
-  // =======================================================================
   Widget _buildStyledButton(_HomeButton btn) {
     final theme = Theme.of(context);
 
@@ -790,7 +635,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   }
 }
 
-// كلاس مساعد للأزرار
 class _HomeButton {
   final IconData icon;
   final String label;
@@ -799,7 +643,6 @@ class _HomeButton {
   _HomeButton(this.icon, this.label, this.onTap);
 }
 
-// كلاس مساعد للأنشطة الأخيرة
 class RecentActivity {
   final String id;
   final String title;
