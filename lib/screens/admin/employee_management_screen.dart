@@ -25,7 +25,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _checkPermissions();
     _loadEmployees();
   }
@@ -143,7 +143,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(icon: Icon(Icons.people), text: 'جميع الموظفين'),
-            Tab(icon: Icon(Icons.star), text: 'أفضل الموظفين'),
             Tab(icon: Icon(Icons.analytics), text: 'الإحصائيات'),
           ],
         ),
@@ -162,7 +161,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
         controller: _tabController,
         children: [
           _buildAllEmployeesTab(),
-          _buildTopEmployeesTab(),
           _buildStatisticsTab(),
         ],
       ),
@@ -317,39 +315,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
         ),
       ),
     );
-  }
-
-  Widget _buildTopEmployeesTab() {
-    final topEmployees = List<Map<String, dynamic>>.from(_allEmployees)
-      ..sort((a, b) => (b['points'] ?? 0).compareTo(a['points'] ?? 0));
-
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: topEmployees.length > 10 ? 10 : topEmployees.length,
-            itemBuilder: (context, index) {
-              final employee = topEmployees[index];
-              final rank = index + 1;
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getRankColor(rank),
-                    child: Text(
-                      '$rank',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  title: Text(employee['fullName'] ?? 'غير محدد'),
-                  subtitle: Text('${employee['points'] ?? 0} نقطة'),
-                  trailing: _getRankIcon(rank),
-                ),
-              );
-            },
-          );
   }
 
   Widget _buildStatisticsTab() {

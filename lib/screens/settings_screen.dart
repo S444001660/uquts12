@@ -1,8 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:uquts1/models/user_account_model.dart';
+import 'package:uquts1/screens/admin/admin_tasks_history_screen.dart';
+import 'package:uquts1/screens/admin/employee_management_screen.dart';
+import 'package:uquts1/screens/admin/reports_screen.dart';
+import 'package:uquts1/screens/technician_stats_screen.dart';
+import 'package:uquts1/screens/user_tasks_screen.dart';
 import '../auth/auth_wrapper.dart'; // للعودة إلى شاشة المصادقة بعد الخروج
 import 'admin/create_user_screen.dart'; // <<<=== هذا هو السطر الجديد والمهم
 import '../services/permissions_service.dart'; // استيراد خدمة الصلاحيات
+import 'package:uquts1/models/user_role_model.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,13 +19,30 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _isAdmin() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return false;
+  bool _isLoading = true;
+  String? _error;
+  UserRole? _currentUserRole;
+  UserAccountModel? _currentUser;
+
+  Future<void> _loadUserAndData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      // تحميل معلومات المستخدم والصلاحيات
+
+      _currentUserRole = await PermissionsService.getCurrentUserRole();
+      _currentUser = await PermissionsService.getCurrentUserInfo();
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      setState(() {
+        _error = 'حدث خطأ في تحميل البيانات: $e';
+        _isLoading = false;
+      });
     }
-    // يجب استبدال هذا الإيميل بالإيميل الفعلي الخاص برئيس القسم
-    return user.email == 'admin@uqu.edu.sa';
   }
 
   Future<void> _signOut() async {
@@ -34,6 +58,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadUserAndData();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -46,26 +76,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // قسم إدارة النظام (يظهر للأدمن فقط)
-          if (_isAdmin())
-            Card(
-              elevation: 4,
-              child: ListTile(
-                leading: Icon(Icons.admin_panel_settings,
-                    color: theme.colorScheme.primary),
-                title: const Text('إدارة المستخدمين'),
-                subtitle: const Text('إنشاء حسابات جديدة للمستخدمين'),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {
-                  // الانتقال إلى شاشة إنشاء المستخدم
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateUserScreen(),
+          // قسم إدارة النظام (يظهر للأدمن فقط)
+          ...(_currentUserRole == UserRole.admin ||
+                  _currentUserRole == UserRole.supervisor
+              ? [
+                  Card(
+                    elevation: 4,
+                    child: ListTile(
+                      leading: Icon(Icons.admin_panel_settings,
+                          color: theme.colorScheme.primary),
+                      title: const Text('إدارة الموظفين'),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const EmployeeManagementScreen(),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    elevation: 4,
+                    child: ListTile(
+                      leading: Icon(Icons.analytics,
+                          color: theme.colorScheme.primary),
+                      title: const Text('التقارير'),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ReportsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    elevation: 4,
+                    child: ListTile(
+                      leading:
+                          Icon(Icons.history, color: theme.colorScheme.primary),
+                      title: const Text('سجل المهام'),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const AdminTasksHistoryScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ]
+              : []),
+
+          ...(_currentUserRole == UserRole.technician
+              ? [
+                  Card(
+                    elevation: 4,
+                    child: ListTile(
+                      leading: Icon(Icons.task_alt,
+                          color: theme.colorScheme.primary),
+                      title: const Text('مهامي'),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const UserTasksScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    elevation: 4,
+                    child: ListTile(
+                      leading: Icon(Icons.insights,
+                          color: theme.colorScheme.primary),
+                      title: const Text('إحصائياتي'),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                TechnicianStatsScreen(user: _currentUser!),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ]
+              : []),
 
           const SizedBox(height: 16),
 

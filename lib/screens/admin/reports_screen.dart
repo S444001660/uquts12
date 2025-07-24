@@ -20,7 +20,10 @@ class _ReportsScreenState extends State<ReportsScreen>
   Map<String, int> _devicesByCollege = {};
   Map<String, int> _labsByStatus = {};
   Map<String, int> _devicesByTimePeriod = {};
+  List<Map<String, dynamic>> _topEmployees = [];
   List<Map<String, dynamic>> _recentActivities = [];
+  String _searchQuery = '';
+  String _selectedRole = 'technician';
 
   // Controllers and filters
   late TabController _tabController;
@@ -34,8 +37,8 @@ class _ReportsScreenState extends State<ReportsScreen>
   @override
   void initState() {
     super.initState();
-    // ======================= التعديل الأول: تم تغيير عدد التبويبات إلى 3 =======================
-    _tabController = TabController(length: 3, vsync: this);
+    // ======================= التعديل الأول: تم تغيير عدد التبويبات إلى 4 =======================
+    _tabController = TabController(length: 4, vsync: this);
     _initializeScreen();
   }
 
@@ -76,6 +79,24 @@ class _ReportsScreenState extends State<ReportsScreen>
         _userDocs = results[2].docs;
       }
 
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _topEmployees = snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {
+              'id': doc.id,
+              ...data,
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      }
+
       // ======================= تم حذف جلب بيانات أفضل الموظفين من هنا =======================
 
       _processAllStats();
@@ -97,6 +118,24 @@ class _ReportsScreenState extends State<ReportsScreen>
     _processLabsByStatus(_labDocs!);
     _processDevicesByTime(_deviceDocs!);
     _processRecentActivities(_deviceDocs!);
+  }
+
+  List<Map<String, dynamic>> get _filteredEmployees {
+    return _topEmployees.where((employee) {
+      final fullName = employee['fullName']?.toString().toLowerCase() ?? '';
+      final email = employee['email']?.toString().toLowerCase() ?? '';
+      final employeeId = employee['employeeId']?.toString().toLowerCase() ?? '';
+      final query = _searchQuery.toLowerCase();
+
+      final matchesSearch = fullName.contains(query) ||
+          email.contains(query) ||
+          employeeId.contains(query);
+
+      final matchesRole =
+          _selectedRole == 'all' || employee['role'] == _selectedRole;
+
+      return matchesSearch && matchesRole;
+    }).toList();
   }
 
   // --- Data Processing Functions (No changes here) ---
@@ -289,6 +328,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'نظرة عامة'),
             Tab(icon: Icon(Icons.bar_chart), text: 'الرسوم البيانية'),
+            Tab(icon: Icon(Icons.people), text: 'أفضل الموظفين'),
             Tab(icon: Icon(Icons.history), text: 'النشاطات الأخيرة'),
           ],
         ),
@@ -310,6 +350,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                   children: [
                     _buildOverviewTab(),
                     _buildChartsTab(),
+                    _buildTopEmployeesTab(),
                     _buildActivitiesTab(),
                   ],
                 ),
@@ -454,7 +495,38 @@ class _ReportsScreenState extends State<ReportsScreen>
     );
   }
 
-  // ======================= تم حذف دالة بناء تبويب أفضل الموظفين بالكامل =======================
+  Widget _buildTopEmployeesTab() {
+    final topEmployees = List<Map<String, dynamic>>.from(_topEmployees)
+      ..sort((a, b) => (b['points'] ?? 0).compareTo(a['points'] ?? 0));
+
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: topEmployees.length > 10 ? 10 : topEmployees.length,
+            itemBuilder: (context, index) {
+              final employee = topEmployees[index];
+              final rank = index + 1;
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: _getRankColor(rank),
+                    child: Text(
+                      '$rank',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  title: Text(employee['fullName'] ?? 'غير محدد'),
+                  subtitle: Text('${employee['points'] ?? 0} نقطة'),
+                  trailing: _getRankIcon(rank),
+                ),
+              );
+            },
+          );
+  }
 
   Widget _buildActivitiesTab() {
     if (_recentActivities.isEmpty) {
@@ -553,87 +625,89 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   Widget _buildLineChart() {
-  final data = _devicesByTimePeriod;
-  if (data.isEmpty) return const Center(child: Text('لا توجد بيانات'));
+    final data = _devicesByTimePeriod;
+    if (data.isEmpty) return const Center(child: Text('لا توجد بيانات'));
 
-  final labels = data.keys.toList();
-  final values = data.values.toList();
+    final labels = data.keys.toList();
+    final values = data.values.toList();
 
-  final spots = List.generate(
-    labels.length,
-    (i) => FlSpot(i.toDouble(), values[i].toDouble()),
-  );
+    final spots = List.generate(
+      labels.length,
+      (i) => FlSpot(i.toDouble(), values[i].toDouble()),
+    );
 
-  return LineChart(
-    LineChartData(
-      minX: 0,
-      maxX: labels.length - 1.toDouble(),
-      gridData: FlGridData(
-        show: true,
-        drawVerticalLine: true,
-        drawHorizontalLine: true,
-        horizontalInterval: 10,
-        verticalInterval: 1,
-        getDrawingHorizontalLine: (value) => FlLine(
-          color: Colors.grey.shade300,
-          strokeWidth: 1,
+    return LineChart(
+      LineChartData(
+        minX: 0,
+        maxX: labels.length - 1.toDouble(),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: true,
+          drawHorizontalLine: true,
+          horizontalInterval: 10,
+          verticalInterval: 1,
+          getDrawingHorizontalLine: (value) => FlLine(
+            color: Colors.grey.shade300,
+            strokeWidth: 1,
+          ),
+          getDrawingVerticalLine: (value) => FlLine(
+            color: Colors.grey.shade300,
+            strokeWidth: 1,
+          ),
         ),
-        getDrawingVerticalLine: (value) => FlLine(
-          color: Colors.grey.shade300,
-          strokeWidth: 1,
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 32,
+              getTitlesWidget: (value, _) {
+                if (value % 1 != 0 || value < 0 || value >= labels.length) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    labels[value.toInt()],
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                );
+              },
+            ),
+          ),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
+        borderData: FlBorderData(show: true),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: false,
+            barWidth: 4,
+            color: Theme.of(context).colorScheme.primary,
+            belowBarData: BarAreaData(show: false),
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, percent, barData, index) {
+                return FlDotCirclePainter(
+                  radius: 6,
+                  color: Theme.of(context).colorScheme.primary,
+                  strokeWidth: 0,
+                );
+              },
+            ),
+          ),
+        ],
       ),
-      titlesData: FlTitlesData(
-        leftTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 40,
-          ),
-        ),
-        bottomTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 32,
-            getTitlesWidget: (value, _) {
-              if (value % 1 != 0 || value < 0 || value >= labels.length) {
-                return const SizedBox.shrink();
-              }
-              return Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  labels[value.toInt()],
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
-                ),
-              );
-            },
-          ),
-        ),
-        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-      ),
-      borderData: FlBorderData(show: true),
-      lineBarsData: [
-        LineChartBarData(
-          spots: spots,
-          isCurved: false,
-          barWidth: 4,
-          color: Theme.of(context).colorScheme.primary,
-          belowBarData: BarAreaData(show: false),
-          dotData: FlDotData(
-            show: true,
-            getDotPainter: (spot, percent, barData, index) {
-              return FlDotCirclePainter(
-                radius: 6,
-                color: Theme.of(context).colorScheme.primary,
-                strokeWidth: 0,
-              );
-            },
-          ),
-        ),
-      ],
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildPieChart() {
     if (_devicesByCollege.isEmpty) {
@@ -649,7 +723,7 @@ class _ReportsScreenState extends State<ReportsScreen>
         color: _getCollegeColor(entry.key),
         value: entry.value.toDouble(),
         title: '${percentage.toStringAsFixed(0)}%',
-        radius:60,
+        radius: 60,
         titleStyle: const TextStyle(
             fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
       );
@@ -819,7 +893,18 @@ class _ReportsScreenState extends State<ReportsScreen>
     }
   }
 
-  // ======================= تم حذف دالة _getRankColor لعدم استخدامها =======================
+  Color _getRankColor(int rank) {
+    switch (rank) {
+      case 1:
+        return Colors.amber;
+      case 2:
+        return Colors.grey[600]!;
+      case 3:
+        return Colors.brown;
+      default:
+        return Colors.blue;
+    }
+  }
 
   String _getTimeAgo(DateTime dateTime) {
     final difference = DateTime.now().difference(dateTime);
@@ -827,5 +912,18 @@ class _ReportsScreenState extends State<ReportsScreen>
     if (difference.inHours > 0) return 'منذ ${difference.inHours} ساعة';
     if (difference.inMinutes > 0) return 'منذ ${difference.inMinutes} دقيقة';
     return 'منذ لحظات';
+  }
+}
+
+Widget? _getRankIcon(int rank) {
+  switch (rank) {
+    case 1:
+      return const Icon(Icons.emoji_events, color: Colors.amber, size: 32);
+    case 2:
+      return Icon(Icons.emoji_events, color: Colors.grey.shade600, size: 28);
+    case 3:
+      return Icon(Icons.emoji_events, color: Colors.brown.shade400, size: 24);
+    default:
+      return null;
   }
 }

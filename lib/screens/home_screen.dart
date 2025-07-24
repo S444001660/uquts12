@@ -278,7 +278,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_scanner), label: 'مسح'),
         BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined), label: 'الإعدادات'),
+            icon: Icon(Icons.more_horiz_outlined), label: 'المزيد'),
       ],
     );
   }
@@ -380,30 +380,10 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         _currentUserRole == UserRole.supervisor) {
       buttons.add(_HomeButton(Icons.assignment_add, 'إسناد مهمة',
           () => _navigateAndReload(const ImprovedAddTaskScreen())));
+    }
 
-      if (_currentUserRole == UserRole.admin) {
-        buttons.addAll([
-          _HomeButton(Icons.people, 'إدارة الموظفين',
-              () => _navigateAndReload(const EmployeeManagementScreen())),
-          _HomeButton(Icons.analytics, 'التقارير',
-              () => _navigateAndReload(const ReportsScreen())),
-          // <-- 3. إضافة الزر الجديد هنا
-          _HomeButton(Icons.history, 'سجل المهام',
-              () => _navigateAndReload(const AdminTasksHistoryScreen())),
-        ]);
-      }
-    }
-    if (_currentUserRole == UserRole.technician) {
-      buttons.addAll([
-        _HomeButton(Icons.task_alt, 'مهامي',
-            () => _navigateAndReload(const UserTasksScreen())),
-        _HomeButton(
-            Icons.insights,
-            'إحصائياتي',
-            () =>
-                _navigateAndReload(TechnicianStatsScreen(user: _currentUser!))),
-      ]);
-    }
+    // تم نقل سجل المهام و التقارير و إدارة الموظفين
+    // تم نقل مهامي و احصائياتي لصفحة المزيد
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
