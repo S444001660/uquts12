@@ -6,16 +6,9 @@ class AdminTaskDetailsScreen extends StatelessWidget {
 
   const AdminTaskDetailsScreen({super.key, required this.task});
 
-  // دالة مساعدة لجلب اسم المستخدم بناءً على UID
-  Future<String> _getUserName(String uid) async {
-    try {
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      return userDoc.data()?['fullName'] ?? 'مستخدم غير معروف';
-    } catch (e) {
-      return 'خطأ في جلب الاسم';
-    }
-  }
+  // ===========================================================================
+  // 1. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +113,22 @@ class AdminTaskDetailsScreen extends StatelessWidget {
     );
   }
 
+  // ===========================================================================
+  // 2. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // ===========================================================================
+
+  /// دالة مساعدة لجلب اسم المستخدم بناءً على UID.
+  Future<String> _getUserName(String uid) async {
+    try {
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      return userDoc.data()?['fullName'] ?? 'مستخدم غير معروف';
+    } catch (e) {
+      return 'خطأ في جلب الاسم';
+    }
+  }
+
+  /// ويدجت مساعد لبناء صف معلومات منسق.
   Widget _buildInfoRow(IconData icon, String label, String value,
       {Color? valueColor}) {
     return Padding(

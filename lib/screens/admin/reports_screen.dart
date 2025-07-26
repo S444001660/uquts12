@@ -12,6 +12,10 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen>
     with TickerProviderStateMixin {
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   bool _isLoading = true;
   String? _error;
 
@@ -34,10 +38,13 @@ class _ReportsScreenState extends State<ReportsScreen>
   List<QueryDocumentSnapshot>? _labDocs;
   List<QueryDocumentSnapshot>? _userDocs;
 
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // ===========================================================================
+
   @override
   void initState() {
     super.initState();
-    // ======================= التعديل الأول: تم تغيير عدد التبويبات إلى 4 =======================
     _tabController = TabController(length: 4, vsync: this);
     _initializeScreen();
   }
@@ -48,265 +55,9 @@ class _ReportsScreenState extends State<ReportsScreen>
     super.dispose();
   }
 
-  Future<void> _initializeScreen() async {
-    final hasPermission =
-        await PermissionsService.hasPermission('view_reports');
-    if (!hasPermission && mounted) {
-      Navigator.pop(context);
-      _showErrorSnackBar('ليس لديك صلاحية لعرض التقارير');
-      return;
-    }
-    await _loadAllData();
-  }
-
-  Future<void> _loadAllData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      if (_deviceDocs == null || _labDocs == null || _userDocs == null) {
-        final results = await Future.wait([
-          FirebaseFirestore.instance.collection('devices').get(),
-          FirebaseFirestore.instance.collection('labs').get(),
-          FirebaseFirestore.instance
-              .collection('users')
-              .where('role', whereIn: ['technician', 'supervisor']).get(),
-        ]);
-        _deviceDocs = results[0].docs;
-        _labDocs = results[1].docs;
-        _userDocs = results[2].docs;
-      }
-
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      if (mounted) {
-        setState(() {
-          _topEmployees = snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return {
-              'id': doc.id,
-              ...data,
-            };
-          }).toList();
-          _isLoading = false;
-        });
-      }
-
-      // ======================= تم حذف جلب بيانات أفضل الموظفين من هنا =======================
-
-      _processAllStats();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _error = 'خطأ في تحميل البيانات: $e');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  void _processAllStats() {
-    if (_deviceDocs == null || _labDocs == null || _userDocs == null) return;
-    _processGeneralStats(_deviceDocs!, _labDocs!, _userDocs!);
-    _processDevicesByCollege(_deviceDocs!);
-    _processLabsByStatus(_labDocs!);
-    _processDevicesByTime(_deviceDocs!);
-    _processRecentActivities(_deviceDocs!);
-  }
-
-  List<Map<String, dynamic>> get _filteredEmployees {
-    return _topEmployees.where((employee) {
-      final fullName = employee['fullName']?.toString().toLowerCase() ?? '';
-      final email = employee['email']?.toString().toLowerCase() ?? '';
-      final employeeId = employee['employeeId']?.toString().toLowerCase() ?? '';
-      final query = _searchQuery.toLowerCase();
-
-      final matchesSearch = fullName.contains(query) ||
-          email.contains(query) ||
-          employeeId.contains(query);
-
-      final matchesRole =
-          _selectedRole == 'all' || employee['role'] == _selectedRole;
-
-      return matchesSearch && matchesRole;
-    }).toList();
-  }
-
-  // --- Data Processing Functions (No changes here) ---
-
-  void _processGeneralStats(List<QueryDocumentSnapshot> devices,
-      List<QueryDocumentSnapshot> labs, List<QueryDocumentSnapshot> users) {
-    final now = DateTime.now();
-    final startOfMonth = DateTime(now.year, now.month, 1);
-
-    final devicesThisMonth = devices.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-      return createdAt != null && createdAt.isAfter(startOfMonth);
-    }).length;
-
-    final activeLabs = labs.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      return data['status'] == 'openWithDevices';
-    }).length;
-
-    final maintenanceDevices = devices.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      return data['needsMaintenance'] == true;
-    }).length;
-
-    _generalStats = {
-      'totalDevices': devices.length,
-      'totalLabs': labs.length,
-      'totalEmployees': users.length,
-      'devicesThisMonth': devicesThisMonth,
-      'activeLabs': activeLabs,
-      'maintenanceDevices': maintenanceDevices,
-      'deviceGrowthRate': _calculateGrowthRate(devices),
-      'averageDevicesPerLab': labs.isNotEmpty
-          ? (devices.length / labs.length).toStringAsFixed(1)
-          : '0',
-    };
-  }
-
-  double _calculateGrowthRate(List<QueryDocumentSnapshot> devices) {
-    final now = DateTime.now();
-    final lastMonth = DateTime(now.year, now.month - 1, 1);
-    final thisMonth = DateTime(now.year, now.month, 1);
-
-    final lastMonthCount = devices.where((doc) {
-      final createdAt =
-          (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      return createdAt != null &&
-          createdAt.toDate().isAfter(lastMonth) &&
-          createdAt.toDate().isBefore(thisMonth);
-    }).length;
-
-    final thisMonthCount = devices.where((doc) {
-      final createdAt =
-          (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      return createdAt != null && createdAt.toDate().isAfter(thisMonth);
-    }).length;
-
-    if (lastMonthCount == 0) return thisMonthCount > 0 ? 100.0 : 0.0;
-    return ((thisMonthCount - lastMonthCount) / lastMonthCount * 100);
-  }
-
-  void _processDevicesByCollege(List<QueryDocumentSnapshot> devices) {
-    final Map<String, int> collegeCount = {};
-    for (final doc in devices) {
-      final college =
-          (doc.data() as Map<String, dynamic>)['college'] as String? ??
-              'غير محدد';
-      collegeCount[college] = (collegeCount[college] ?? 0) + 1;
-    }
-    _devicesByCollege = collegeCount;
-  }
-
-  void _processLabsByStatus(List<QueryDocumentSnapshot> labs) {
-    final Map<String, int> statusCount = {
-      'مفتوح مع أجهزة': 0,
-      'يوجد مشكلة': 0,
-      'مغلق': 0,
-    };
-    for (final doc in labs) {
-      final status =
-          (doc.data() as Map<String, dynamic>)['status'] as String? ?? 'closed';
-      switch (status) {
-        case 'openWithDevices':
-          statusCount['مفتوح مع أجهزة'] =
-              (statusCount['مفتوح مع أجهزة'] ?? 0) + 1;
-          break;
-        case 'openNoDevices':
-          statusCount['يوجد مشكلة'] = (statusCount['يوجد مشكلة'] ?? 0) + 1;
-          break;
-        case 'closed':
-          statusCount['مغلق'] = (statusCount['مغلق'] ?? 0) + 1;
-          break;
-      }
-    }
-    _labsByStatus = statusCount;
-  }
-
-  void _processDevicesByTime(List<QueryDocumentSnapshot> devices) {
-    final now = DateTime.now();
-    Map<String, int> timeData = {};
-
-    if (_selectedTimeFilter == 'week') {
-      final daysOfWeek = List.generate(
-          7, (i) => _getDayName(now.subtract(Duration(days: i)).weekday));
-      timeData = {for (var day in daysOfWeek.reversed) day: 0};
-
-      for (final doc in devices) {
-        final createdAt =
-            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-        if (createdAt != null &&
-            now.difference(createdAt.toDate()).inDays < 7) {
-          final dayName = _getDayName(createdAt.toDate().weekday);
-          timeData[dayName] = (timeData[dayName] ?? 0) + 1;
-        }
-      }
-    } else if (_selectedTimeFilter == 'month') {
-      final monthsOfYear = List.generate(
-          12, (i) => _getMonthName(DateTime(now.year, now.month - i).month));
-      timeData = {for (var month in monthsOfYear.reversed) month: 0};
-
-      for (final doc in devices) {
-        final createdAt =
-            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-        if (createdAt != null &&
-            now.difference(createdAt.toDate()).inDays < 365) {
-          final monthName = _getMonthName(createdAt.toDate().month);
-          timeData[monthName] = (timeData[monthName] ?? 0) + 1;
-        }
-      }
-    } else {
-      // year
-      timeData = {for (var i = 4; i >= 0; i--) (now.year - i).toString(): 0};
-
-      for (final doc in devices) {
-        final createdAt =
-            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-        if (createdAt != null && now.year - createdAt.toDate().year < 5) {
-          final year = createdAt.toDate().year.toString();
-          timeData[year] = (timeData[year] ?? 0) + 1;
-        }
-      }
-    }
-    _devicesByTimePeriod = timeData;
-  }
-
-  void _processRecentActivities(List<QueryDocumentSnapshot> devices) {
-    devices.sort((a, b) {
-      final dateA =
-          (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      final dateB =
-          (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      return (dateB ?? Timestamp(0, 0)).compareTo(dateA ?? Timestamp(0, 0));
-    });
-
-    _recentActivities = devices.take(10).map((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      return {
-        'description': 'تمت إضافة جهاز "${data['name'] ?? 'غير معروف'}"',
-        'college': data['college'] ?? 'غير محدد',
-        'createdAt': data['createdAt'],
-      };
-    }).toList();
-  }
-
-  void _showErrorSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
-  }
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +75,6 @@ class _ReportsScreenState extends State<ReportsScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           isScrollable: true,
-          // ======================= التعديل الثاني: تم حذف تبويب أفضل الموظفين =======================
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'نظرة عامة'),
             Tab(icon: Icon(Icons.bar_chart), text: 'الرسوم البيانية'),
@@ -346,7 +96,6 @@ class _ReportsScreenState extends State<ReportsScreen>
               ? Center(child: Text(_error!))
               : TabBarView(
                   controller: _tabController,
-                  // ======================= التعديل الثالث: تم حذف عرض تبويب أفضل الموظفين =======================
                   children: [
                     _buildOverviewTab(),
                     _buildChartsTab(),
@@ -356,6 +105,86 @@ class _ReportsScreenState extends State<ReportsScreen>
                 ),
     );
   }
+
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي (Core Business Logic) - (أساسي)
+  // ===========================================================================
+
+  /// دالة لتهيئة الشاشة والتحقق من الصلاحيات.
+  Future<void> _initializeScreen() async {
+    final hasPermission =
+        await PermissionsService.hasPermission('view_reports');
+    if (!hasPermission && mounted) {
+      Navigator.pop(context);
+      _showErrorSnackBar('ليس لديك صلاحية لعرض التقارير');
+      return;
+    }
+    await _loadAllData();
+  }
+
+  /// دالة لتحميل جميع البيانات الأولية من قاعدة البيانات.
+  Future<void> _loadAllData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      if (_deviceDocs == null || _labDocs == null || _userDocs == null) {
+        final results = await Future.wait([
+          FirebaseFirestore.instance.collection('devices').get(),
+          FirebaseFirestore.instance.collection('labs').get(),
+          FirebaseFirestore.instance
+              .collection('users')
+              .where('role', whereIn: ['technician', 'supervisor']).get(),
+        ]);
+        _deviceDocs = results[0].docs;
+        _labDocs = results[1].docs;
+        _userDocs = results[2].docs;
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _topEmployees = snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {
+              'id': doc.id,
+              ...data,
+            };
+          }).toList();
+        });
+      }
+
+      _processAllStats();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = 'خطأ في تحميل البيانات: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// دالة لتشغيل جميع دوال معالجة الإحصائيات.
+  void _processAllStats() {
+    if (_deviceDocs == null || _labDocs == null || _userDocs == null) return;
+    _processGeneralStats(_deviceDocs!, _labDocs!, _userDocs!);
+    _processDevicesByCollege(_deviceDocs!);
+    _processLabsByStatus(_labDocs!);
+    _processDevicesByTime(_deviceDocs!);
+    _processRecentActivities(_deviceDocs!);
+  }
+
+  // ===========================================================================
+  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets) - (يمكن فصلها)
+  // ===========================================================================
 
   Widget _buildOverviewTab() {
     return SingleChildScrollView(
@@ -554,7 +383,199 @@ class _ReportsScreenState extends State<ReportsScreen>
     );
   }
 
-  // --- Helper and Builder Widgets (No changes here, except removed unused ones) ---
+  // ===========================================================================
+  // 6. دوال معالجة البيانات (Data Processing Functions) - (يمكن فصلها)
+  // ===========================================================================
+
+  void _processGeneralStats(List<QueryDocumentSnapshot> devices,
+      List<QueryDocumentSnapshot> labs, List<QueryDocumentSnapshot> users) {
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1);
+
+    final devicesThisMonth = devices.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+      return createdAt != null && createdAt.isAfter(startOfMonth);
+    }).length;
+
+    final activeLabs = labs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return data['status'] == 'openWithDevices';
+    }).length;
+
+    final maintenanceDevices = devices.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return data['needsMaintenance'] == true;
+    }).length;
+
+    _generalStats = {
+      'totalDevices': devices.length,
+      'totalLabs': labs.length,
+      'totalEmployees': users.length,
+      'devicesThisMonth': devicesThisMonth,
+      'activeLabs': activeLabs,
+      'maintenanceDevices': maintenanceDevices,
+      'deviceGrowthRate': _calculateGrowthRate(devices),
+      'averageDevicesPerLab': labs.isNotEmpty
+          ? (devices.length / labs.length).toStringAsFixed(1)
+          : '0',
+    };
+  }
+
+  double _calculateGrowthRate(List<QueryDocumentSnapshot> devices) {
+    final now = DateTime.now();
+    final lastMonth = DateTime(now.year, now.month - 1, 1);
+    final thisMonth = DateTime(now.year, now.month, 1);
+
+    final lastMonthCount = devices.where((doc) {
+      final createdAt =
+          (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+      return createdAt != null &&
+          createdAt.toDate().isAfter(lastMonth) &&
+          createdAt.toDate().isBefore(thisMonth);
+    }).length;
+
+    final thisMonthCount = devices.where((doc) {
+      final createdAt =
+          (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+      return createdAt != null && createdAt.toDate().isAfter(thisMonth);
+    }).length;
+
+    if (lastMonthCount == 0) return thisMonthCount > 0 ? 100.0 : 0.0;
+    return ((thisMonthCount - lastMonthCount) / lastMonthCount * 100);
+  }
+
+  void _processDevicesByCollege(List<QueryDocumentSnapshot> devices) {
+    final Map<String, int> collegeCount = {};
+    for (final doc in devices) {
+      final college =
+          (doc.data() as Map<String, dynamic>)['college'] as String? ??
+              'غير محدد';
+      collegeCount[college] = (collegeCount[college] ?? 0) + 1;
+    }
+    _devicesByCollege = collegeCount;
+  }
+
+  void _processLabsByStatus(List<QueryDocumentSnapshot> labs) {
+    final Map<String, int> statusCount = {
+      'مفتوح مع أجهزة': 0,
+      'يوجد مشكلة': 0,
+      'مغلق': 0,
+    };
+    for (final doc in labs) {
+      final status =
+          (doc.data() as Map<String, dynamic>)['status'] as String? ?? 'closed';
+      switch (status) {
+        case 'openWithDevices':
+          statusCount['مفتوح مع أجهزة'] =
+              (statusCount['مفتوح مع أجهزة'] ?? 0) + 1;
+          break;
+        case 'openNoDevices':
+          statusCount['يوجد مشكلة'] = (statusCount['يوجد مشكلة'] ?? 0) + 1;
+          break;
+        case 'closed':
+          statusCount['مغلق'] = (statusCount['مغلق'] ?? 0) + 1;
+          break;
+      }
+    }
+    _labsByStatus = statusCount;
+  }
+
+  void _processDevicesByTime(List<QueryDocumentSnapshot> devices) {
+    final now = DateTime.now();
+    Map<String, int> timeData = {};
+
+    if (_selectedTimeFilter == 'week') {
+      final daysOfWeek = List.generate(
+          7, (i) => _getDayName(now.subtract(Duration(days: i)).weekday));
+      timeData = {for (var day in daysOfWeek.reversed) day: 0};
+
+      for (final doc in devices) {
+        final createdAt =
+            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+        if (createdAt != null &&
+            now.difference(createdAt.toDate()).inDays < 7) {
+          final dayName = _getDayName(createdAt.toDate().weekday);
+          timeData[dayName] = (timeData[dayName] ?? 0) + 1;
+        }
+      }
+    } else if (_selectedTimeFilter == 'month') {
+      final monthsOfYear = List.generate(
+          12, (i) => _getMonthName(DateTime(now.year, now.month - i).month));
+      timeData = {for (var month in monthsOfYear.reversed) month: 0};
+
+      for (final doc in devices) {
+        final createdAt =
+            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+        if (createdAt != null &&
+            now.difference(createdAt.toDate()).inDays < 365) {
+          final monthName = _getMonthName(createdAt.toDate().month);
+          timeData[monthName] = (timeData[monthName] ?? 0) + 1;
+        }
+      }
+    } else {
+      // year
+      timeData = {for (var i = 4; i >= 0; i--) (now.year - i).toString(): 0};
+
+      for (final doc in devices) {
+        final createdAt =
+            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+        if (createdAt != null && now.year - createdAt.toDate().year < 5) {
+          final year = createdAt.toDate().year.toString();
+          timeData[year] = (timeData[year] ?? 0) + 1;
+        }
+      }
+    }
+    _devicesByTimePeriod = timeData;
+  }
+
+  void _processRecentActivities(List<QueryDocumentSnapshot> devices) {
+    devices.sort((a, b) {
+      final dateA =
+          (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+      final dateB =
+          (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+      return (dateB ?? Timestamp(0, 0)).compareTo(dateA ?? Timestamp(0, 0));
+    });
+
+    _recentActivities = devices.take(10).map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return {
+        'description': 'تمت إضافة جهاز "${data['name'] ?? 'غير معروف'}"',
+        'college': data['college'] ?? 'غير محدد',
+        'createdAt': data['createdAt'],
+      };
+    }).toList();
+  }
+
+  // ===========================================================================
+  // 7. دوال مساعدة متنوعة (Misc Helpers) - (يمكن فصلها)
+  // ===========================================================================
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  List<Map<String, dynamic>> get _filteredEmployees {
+    return _topEmployees.where((employee) {
+      final fullName = employee['fullName']?.toString().toLowerCase() ?? '';
+      final email = employee['email']?.toString().toLowerCase() ?? '';
+      final employeeId = employee['employeeId']?.toString().toLowerCase() ?? '';
+      final query = _searchQuery.toLowerCase();
+
+      final matchesSearch = fullName.contains(query) ||
+          email.contains(query) ||
+          employeeId.contains(query);
+
+      final matchesRole =
+          _selectedRole == 'all' || employee['role'] == _selectedRole;
+
+      return matchesSearch && matchesRole;
+    }).toList();
+  }
 
   Widget _buildStatCard({
     required String title,
@@ -849,32 +870,16 @@ class _ReportsScreenState extends State<ReportsScreen>
   String _getMonthName(int month) {
     final correctedMonth = (month - 1).abs() % 12;
     const months = [
-      'ينا',
-      'فبر',
-      'مار',
-      'أبر',
-      'ماي',
-      'يون',
-      'يول',
-      'أغس',
-      'سبت',
-      'أكت',
-      'نوف',
-      'ديس'
+      'ينا', 'فبر', 'مار', 'أبر', 'ماي', 'يون',
+      'يول', 'أغس', 'سبت', 'أكت', 'نوف', 'ديس'
     ];
     return months[correctedMonth];
   }
 
   Color _getCollegeColor(String college) {
     final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.red,
-      Colors.teal,
-      Colors.amber,
-      Colors.indigo
+      Colors.blue, Colors.green, Colors.orange, Colors.purple,
+      Colors.red, Colors.teal, Colors.amber, Colors.indigo
     ];
     final index = _devicesByCollege.keys.toList().indexOf(college);
     return colors[index % colors.length];

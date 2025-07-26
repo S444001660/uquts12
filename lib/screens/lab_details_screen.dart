@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '/services/permissions_service.dart';
+import '../services/permissions_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/device_model.dart';
 import '../models/lab_model.dart';
@@ -26,10 +26,14 @@ class LabDetailsScreen extends StatefulWidget {
 //------------------------------------------------------------------------------
 
 class _LabDetailsScreenState extends State<LabDetailsScreen> {
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   late LabModel _currentLab;
   bool _isLoading = true;
   List<DeviceModel> _devices = [];
-  bool _canDelete = false; // متغير لتخزين صلاحية الحذف
+  bool _canDelete = false;
 
   final Map<String, String> _collegeLocations = {
     'كلية الهندسة': 'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7',
@@ -39,6 +43,10 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     'كلية الإدارة والاقتصاد': 'https://maps.app.goo.gl/7ysTpqfdpZPPQTAn8',
   };
 
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // ===========================================================================
+
   @override
   void initState() {
     super.initState();
@@ -46,97 +54,9 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     _initializeScreen();
   }
 
-  Future<void> _initializeScreen() async {
-    await _checkPermissions();
-    await _loadLabDetails();
-    await _loadDevices();
-  }
-
-  Future<void> _checkPermissions() async {
-    final canDelete = await PermissionsService.hasPermission('delete_lab');
-    if (mounted) {
-      setState(() {
-        _canDelete = canDelete;
-      });
-    }
-  }
-
-  Future<void> _loadLabDetails() async {
-    try {
-      final updatedLab =
-          await FirebaseDatabaseService.getLabById(_currentLab.id);
-      if (updatedLab != null && mounted) {
-        setState(() {
-          _currentLab = updatedLab;
-        });
-      }
-    } catch (e) {
-      debugPrint('خطأ في تحديث تفاصيل المعمل: $e');
-    }
-  }
-
-  Future<void> _loadDevices() async {
-    try {
-      if (mounted) setState(() => _isLoading = true);
-      final labDevices =
-          await FirebaseDatabaseService.getDevicesForLab(_currentLab.id);
-
-      if (mounted) {
-        setState(() {
-          _devices = labDevices;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        UIHelpers.showErrorSnackBar(context, 'خطأ في تحميل الأجهزة: $e');
-      }
-    }
-  }
-
-  Future<void> _openLocationInMaps() async {
-    final locationUrl = _currentLab.locationUrl ??
-        _collegeLocations[_currentLab.college] ??
-        'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7';
-
-    final Uri url = Uri.parse(locationUrl);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        UIHelpers.showErrorSnackBar(context, 'تعذر فتح الموقع');
-      }
-    }
-  }
-
-  Future<void> _deleteLab() async {
-    final confirm = await UIHelpers.showConfirmationDialog(
-      context: context,
-      title: 'تأكيد الحذف',
-      content:
-          'هل أنت متأكد من حذف معمل "${_currentLab.labNumber}"؟ سيتم إلغاء ربط جميع الأجهزة به.',
-      confirmText: 'حذف',
-      confirmColor: Colors.red,
-    );
-
-    if (confirm == true) {
-      try {
-        setState(() => _isLoading = true);
-        await FirebaseDatabaseService.deleteLab(_currentLab.id);
-        if (mounted) {
-          Navigator.pop(context, true); // إرجاع true للإشارة إلى حدوث تغيير
-          UIHelpers.showSuccessSnackBar(context, 'تم حذف المعمل بنجاح');
-        }
-      } catch (e) {
-        if (mounted) {
-          UIHelpers.showErrorSnackBar(context, 'خطأ في حذف المعمل: $e');
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
-      }
-    }
-  }
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -162,7 +82,7 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
               });
             },
           ),
-          if (_canDelete) // عرض زر الحذف فقط إذا كانت الصلاحية موجودة
+          if (_canDelete)
             IconButton(
               icon: const Icon(Icons.delete),
               tooltip: 'حذف المعمل',
@@ -176,6 +96,7 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // عرض الصورة
               if (_currentLab.imagePath != null &&
                   _currentLab.imagePath!.startsWith('http'))
                 GestureDetector(
@@ -227,6 +148,8 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
                   ),
                 ),
               const SizedBox(height: 16),
+
+              // بطاقة معلومات المعمل
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -280,6 +203,8 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              // بطاقة قائمة الأجهزة
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -404,6 +329,109 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     );
   }
 
+  // ===========================================================================
+  // 5. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // ===========================================================================
+
+  /// دالة لتهيئة الشاشة بالكامل (صلاحيات وتفاصيل وأجهزة).
+  Future<void> _initializeScreen() async {
+    await _checkPermissions();
+    await _loadLabDetails();
+    await _loadDevices();
+  }
+
+  /// التحقق من صلاحيات المستخدم (مثل صلاحية الحذف).
+  Future<void> _checkPermissions() async {
+    final canDelete = await PermissionsService.hasPermission('delete_lab');
+    if (mounted) {
+      setState(() {
+        _canDelete = canDelete;
+      });
+    }
+  }
+
+  /// تحميل/تحديث تفاصيل المعمل الحالية من قاعدة البيانات.
+  Future<void> _loadLabDetails() async {
+    try {
+      final updatedLab =
+          await FirebaseDatabaseService.getLabById(_currentLab.id);
+      if (updatedLab != null && mounted) {
+        setState(() {
+          _currentLab = updatedLab;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ في تحديث تفاصيل المعمل: $e');
+    }
+  }
+
+  /// تحميل قائمة الأجهزة الخاصة بهذا المعمل.
+  Future<void> _loadDevices() async {
+    try {
+      if (mounted) setState(() => _isLoading = true);
+      final labDevices =
+          await FirebaseDatabaseService.getDevicesForLab(_currentLab.id);
+
+      if (mounted) {
+        setState(() {
+          _devices = labDevices;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        UIHelpers.showErrorSnackBar(context, 'خطأ في تحميل الأجهزة: $e');
+      }
+    }
+  }
+
+  /// فتح رابط الموقع في تطبيق الخرائط الخارجي.
+  Future<void> _openLocationInMaps() async {
+    final locationUrl = _currentLab.locationUrl ??
+        _collegeLocations[_currentLab.college] ??
+        'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7';
+
+    final Uri url = Uri.parse(locationUrl);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        UIHelpers.showErrorSnackBar(context, 'تعذر فتح الموقع');
+      }
+    }
+  }
+
+  /// حذف المعمل بعد تأكيد المستخدم.
+  Future<void> _deleteLab() async {
+    final confirm = await UIHelpers.showConfirmationDialog(
+      context: context,
+      title: 'تأكيد الحذف',
+      content:
+          'هل أنت متأكد من حذف معمل "${_currentLab.labNumber}"؟ سيتم إلغاء ربط جميع الأجهزة به.',
+      confirmText: 'حذف',
+      confirmColor: Colors.red,
+    );
+
+    if (confirm == true) {
+      try {
+        setState(() => _isLoading = true);
+        await FirebaseDatabaseService.deleteLab(_currentLab.id);
+        if (mounted) {
+          Navigator.pop(context, true); // إرجاع true للإشارة إلى حدوث تغيير
+          UIHelpers.showSuccessSnackBar(context, 'تم حذف المعمل بنجاح');
+        }
+      } catch (e) {
+        if (mounted) {
+          UIHelpers.showErrorSnackBar(context, 'خطأ في حذف المعمل: $e');
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
+  }
+
+  /// ويدجت مساعد لبناء صف تفاصيل (أيقونة، عنوان، قيمة).
   Widget _buildDetailRow(
       {required IconData icon,
       required String label,
@@ -420,6 +448,9 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
   }
 }
 
+//------------------------------------------------------------------------------
+
+/// امتداد (Extension) على `LabStatus` لإضافة خصائص مساعدة.
 extension LabStatusExtension on LabStatus {
   String get displayName {
     switch (this) {

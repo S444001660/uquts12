@@ -14,6 +14,10 @@ class ImprovedAddTaskScreen extends StatefulWidget {
 }
 
 class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   final _formKey = GlobalKey<FormState>();
   TaskType _selectedTaskType = TaskType.deviceRegistration;
   String? _selectedCollege;
@@ -22,6 +26,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
   List<Map<String, dynamic>> _availableUsers = [];
   bool _isLoading = false;
   int _targetCount = 1;
+  String _searchQuery = '';
 
   final List<String> _colleges = [
     'كلية الحاسب',
@@ -31,7 +36,9 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     'كلية الإدارة والاقتصاد'
   ];
 
-  String _searchQuery = '';
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
+  // ===========================================================================
 
   @override
   void initState() {
@@ -39,41 +46,12 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     _loadUsers();
   }
 
-  // دالة لجلب المستخدمين (الفنيين والمشرفين) من قاعدة البيانات
-  Future<void> _loadUsers() async {
-    setState(() => _isLoading = true);
-    try {
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('isActive', isEqualTo: true)
-          .where('role', whereIn: ['technician', 'supervisor']).get();
+  // ===========================================================================
+  // 3. منطق العمل الرئيسي (Core Business Logic)
+  // ===========================================================================
 
-      setState(() {
-        _availableUsers = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return {
-            'id': doc.id,
-            'fullName': data['fullName'] ?? 'مستخدم غير معروف',
-            'employeeId': data['employeeId'] ?? '',
-            'department': data['department'] ?? '',
-            'role': data['role'] ?? 'technician',
-            'points': data['points'] ?? 0,
-          };
-        }).toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في تحميل المستخدمين: $e')),
-      );
-    }
-  }
-
-  // --- الدالة المعدلة لإنشاء المهمة باستخدام WriteBatch ---
+  /// الدالة الرئيسية لإنشاء المهمة باستخدام WriteBatch لضمان تكامل البيانات.
   Future<void> _createTask() async {
-    // 1. التحقق من أن الحقول المطلوبة معبأة
     if (!_formKey.currentState!.validate() || _assignedTechnicians.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -85,14 +63,12 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
 
     setState(() => _isLoading = true);
 
-    // 2. استخدام WriteBatch لضمان تنفيذ جميع العمليات معًا
     final batch = FirebaseFirestore.instance.batch();
 
     try {
       final taskId = const Uuid().v4();
       final currentUser = FirebaseAuth.instance.currentUser;
 
-      // 3. تجهيز بيانات المهمة الرئيسية وإضافتها للـ Batch
       final taskRef =
           FirebaseFirestore.instance.collection('tasks').doc(taskId);
       final taskData = {
@@ -114,7 +90,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
       };
       batch.set(taskRef, taskData);
 
-      // 4. تجهيز المهام الفردية لكل مستخدم وإضافتها للـ Batch
       for (String userId in _assignedTechnicians) {
         final individualTaskId = const Uuid().v4();
         final userTaskRef = FirebaseFirestore.instance
@@ -123,7 +98,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
         batch.set(userTaskRef, {
           'id': individualTaskId,
           'taskId': taskId,
-          'userId': userId, // التأكد من أن هذا هو الـ UID الصحيح للمستخدم
+          'userId': userId,
           'isCompleted': false,
           'progress': 0,
           'assignedAt': Timestamp.now(),
@@ -131,7 +106,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
         });
       }
 
-      // 5. تنفيذ جميع العمليات في الـ Batch مرة واحدة
       await batch.commit();
 
       if (!mounted) return;
@@ -153,40 +127,30 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     }
   }
 
-  // دالة مساعدة لترجمة نوع المهمة إلى نص عربي
-  String _getTaskTypeDisplayName(TaskType type) {
-    switch (type) {
-      case TaskType.inspection:
-        return 'فحص';
-      case TaskType.setup:
-        return 'تجهيز';
-      case TaskType.maintenance:
-        return 'صيانة';
-      case TaskType.deviceRegistration:
-        return 'تسجيل أجهزة';
-      case TaskType.other:
-        return 'أخرى';
-    }
-  }
+  // ===========================================================================
+  // 4. دالة بناء واجهة المستخدم (UI Build Method)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
-    // عرض شاشة تحميل أثناء جلب البيانات
     if (_isLoading && _availableUsers.isEmpty) {
-      // تم حذف كلمة const من هنا لحل المشكلة
       return Scaffold(
         appBar: AppBar(title: const Text('إسناد مهمة جديدة')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    // فلترة المستخدمين بناءً على البحث
     final filteredUsers = _availableUsers.where((user) {
       final fullName = user['fullName']?.toLowerCase() ?? '';
       final employeeId = user['employeeId']?.toLowerCase() ?? '';
       final query = _searchQuery.toLowerCase();
       return fullName.contains(query) || employeeId.contains(query);
     }).toList();
+
+    // --- منطق جديد: تحديد حالة مربع "تحديد الكل" ---
+    final allFilteredSelected = filteredUsers.isNotEmpty &&
+        filteredUsers
+            .every((user) => _assignedTechnicians.contains(user['id']));
 
     return Scaffold(
       appBar: AppBar(title: const Text('إسناد مهمة جديدة')),
@@ -198,7 +162,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
               key: _formKey,
               child: ListView(
                 children: [
-                  // نوع المهمة
+                  // ... (بقية حقول الفورم لم تتغير)
                   DropdownButtonFormField<TaskType>(
                     value: _selectedTaskType,
                     items: TaskType.values.map((type) {
@@ -218,8 +182,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // الكلية
                   DropdownButtonFormField<String>(
                     value: _selectedCollege,
                     items: _colleges.map((college) {
@@ -238,8 +200,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                         value == null ? 'يرجى اختيار الكلية' : null,
                   ),
                   const SizedBox(height: 16),
-
-                  // حقل عدد الأجهزة (يظهر فقط لنوع مهمة تسجيل الأجهزة)
                   if (_selectedTaskType == TaskType.deviceRegistration)
                     TextFormField(
                       initialValue: _targetCount.toString(),
@@ -260,8 +220,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                     ),
                   if (_selectedTaskType == TaskType.deviceRegistration)
                     const SizedBox(height: 16),
-
-                  // الملاحظات
                   TextFormField(
                     maxLines: 3,
                     decoration: const InputDecoration(
@@ -271,8 +229,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                     onChanged: (val) => _notes = val,
                   ),
                   const SizedBox(height: 16),
-
-                  // البحث واختيار الموظفين
                   Text(
                     'إسناد إلى:',
                     style: Theme.of(context).textTheme.titleMedium,
@@ -287,32 +243,63 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                     onChanged: (val) => setState(() => _searchQuery = val),
                   ),
                   const SizedBox(height: 8),
-                  // قائمة الموظفين
+
+                  // --- تعديل: إضافة مربع "تحديد الكل" وقائمة الموظفين ---
                   Container(
-                    height: 250, // تحديد ارتفاع ثابت للقائمة
+                    height: 250,
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey.shade300),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: ListView(
-                      children: filteredUsers.map((user) {
-                        final isSelected =
-                            _assignedTechnicians.contains(user['id']);
-                        return CheckboxListTile(
-                          title: Text(user['fullName']),
-                          subtitle: Text('رقم الموظف: ${user['employeeId']}'),
-                          value: isSelected,
-                          onChanged: (val) {
-                            setState(() {
-                              if (val == true) {
-                                _assignedTechnicians.add(user['id']);
-                              } else {
-                                _assignedTechnicians.remove(user['id']);
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
+                      children: [
+                        // --- الإضافة الجديدة: مربع تحديد الكل ---
+                        if (filteredUsers.isNotEmpty)
+                          CheckboxListTile(
+                            title: const Text('تحديد كل الموظفين الظاهرين',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            value: allFilteredSelected,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                final filteredUserIds = filteredUsers
+                                    .map((u) => u['id'] as String)
+                                    .toList();
+                                if (value == true) {
+                                  // أضف كل الموظفين المصفاة
+                                  _assignedTechnicians.addAll(filteredUserIds);
+                                  // إزالة التكرار لضمان عدم وجود مشاكل
+                                  _assignedTechnicians =
+                                      _assignedTechnicians.toSet().toList();
+                                } else {
+                                  // إزالة كل الموظفين المصفاة
+                                  _assignedTechnicians.removeWhere(
+                                      (id) => filteredUserIds.contains(id));
+                                }
+                              });
+                            },
+                          ),
+                        if (filteredUsers.isNotEmpty) const Divider(height: 1),
+
+                        // قائمة الموظفين الأصلية
+                        ...filteredUsers.map((user) {
+                          final isSelected =
+                              _assignedTechnicians.contains(user['id']);
+                          return CheckboxListTile(
+                            title: Text(user['fullName']),
+                            subtitle: Text('رقم الموظف: ${user['employeeId']}'),
+                            value: isSelected,
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _assignedTechnicians.add(user['id']);
+                                } else {
+                                  _assignedTechnicians.remove(user['id']);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -331,7 +318,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
               ),
             ),
           ),
-          // عرض مؤشر التحميل فوق الواجهة عند الضغط على الزر
           if (_isLoading)
             Container(
               color: Colors.black.withOpacity(0.5),
@@ -342,5 +328,60 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
         ],
       ),
     );
+  }
+
+  // ===========================================================================
+  // 5. الدوال المساعدة (Helper Functions)
+  // ===========================================================================
+
+  /// دالة لجلب المستخدمين (الفنيين والمشرفين) من قاعدة البيانات.
+  Future<void> _loadUsers() async {
+    setState(() => _isLoading = true);
+    try {
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('isActive', isEqualTo: true)
+          .where('role', whereIn: ['technician', 'supervisor']).get();
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableUsers = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return {
+            'id': doc.id,
+            'fullName': data['fullName'] ?? 'مستخدم غير معروف',
+            'employeeId': data['employeeId'] ?? '',
+            'department': data['department'] ?? '',
+            'role': data['role'] ?? 'technician',
+            'points': data['points'] ?? 0,
+          };
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في تحميل المستخدمين: $e')),
+        );
+      }
+    }
+  }
+
+  /// دالة مساعدة لترجمة نوع المهمة إلى نص عربي.
+  String _getTaskTypeDisplayName(TaskType type) {
+    switch (type) {
+      case TaskType.inspection:
+        return 'فحص';
+      case TaskType.setup:
+        return 'تجهيز';
+      case TaskType.maintenance:
+        return 'صيانة';
+      case TaskType.deviceRegistration:
+        return 'تسجيل أجهزة';
+      case TaskType.other:
+        return 'أخرى';
+    }
   }
 }

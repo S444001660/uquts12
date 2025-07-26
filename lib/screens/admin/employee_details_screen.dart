@@ -1,37 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../utils/ui_helpers.dart'; // للتنبيهات
+import '../../utils/ui_helpers.dart';
 
 class EmployeeDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> employeeData;
 
   const EmployeeDetailsScreen({super.key, required this.employeeData});
 
-  // دالة لإعادة تعيين كلمة المرور
-  Future<void> _resetPassword(BuildContext context, String email) async {
-    final confirmed = await UIHelpers.showConfirmationDialog(
-      context: context,
-      title: 'إعادة تعيين كلمة المرور',
-      content:
-          'هل أنت متأكد أنك تريد إرسال رابط إعادة تعيين كلمة المرور إلى البريد الإلكتروني $email ؟',
-      confirmText: 'إرسال',
-      cancelText: 'إلغاء',
-    );
-
-    if (confirmed == true) {
-      try {
-        await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-        if (context.mounted) {
-          UIHelpers.showSuccessSnackBar(
-              context, 'تم إرسال رابط إعادة التعيين بنجاح.');
-        }
-      } catch (e) {
-        if (context.mounted) {
-          UIHelpers.showErrorSnackBar(context, 'فشل إرسال الرابط: $e');
-        }
-      }
-    }
-  }
+  // ===========================================================================
+  // 1. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +95,37 @@ class EmployeeDetailsScreen extends StatelessWidget {
     );
   }
 
+  // ===========================================================================
+  // 2. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // ===========================================================================
+
+  /// دالة لإعادة تعيين كلمة المرور.
+  Future<void> _resetPassword(BuildContext context, String email) async {
+    final confirmed = await UIHelpers.showConfirmationDialog(
+      context: context,
+      title: 'إعادة تعيين كلمة المرور',
+      content:
+          'هل أنت متأكد أنك تريد إرسال رابط إعادة تعيين كلمة المرور إلى البريد الإلكتروني $email ؟',
+      confirmText: 'إرسال',
+      cancelText: 'إلغاء',
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+        if (context.mounted) {
+          UIHelpers.showSuccessSnackBar(
+              context, 'تم إرسال رابط إعادة التعيين بنجاح.');
+        }
+      } catch (e) {
+        if (context.mounted) {
+          UIHelpers.showErrorSnackBar(context, 'فشل إرسال الرابط: $e');
+        }
+      }
+    }
+  }
+
+  /// ويدجت مساعد لبناء صف معلومات منسق.
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -132,6 +141,7 @@ class EmployeeDetailsScreen extends StatelessWidget {
     );
   }
 
+  /// ويدجت مساعد لبناء بطاقة إحصائية واحدة.
   Widget _buildStatCard(
       String title, String value, IconData icon, Color color) {
     return Card(

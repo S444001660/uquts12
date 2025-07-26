@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart'; // <-- استيراد ضروري للحل
+import 'package:firebase_core/firebase_core.dart';
 import '../../utils/ui_helpers.dart';
 
 class CreateUserScreen extends StatefulWidget {
@@ -12,6 +12,10 @@ class CreateUserScreen extends StatefulWidget {
 }
 
 class _CreateUserScreenState extends State<CreateUserScreen> {
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -21,6 +25,10 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
 
   bool _isLoading = false;
   bool _isPasswordVisible = false;
+
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // ===========================================================================
 
   @override
   void dispose() {
@@ -32,101 +40,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     super.dispose();
   }
 
-  // ======================= الحل يبدأ هنا =======================
-  Future<void> _createUser() async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    final admin = FirebaseAuth.instance.currentUser;
-    if (admin == null) {
-      UIHelpers.showErrorSnackBar(context, "خطأ: المدير غير مسجل دخوله.");
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    // 1. إنشاء اسم فريد للتطبيق الثانوي لتجنب التضارب
-    String secondaryAppName =
-        'userCreation-${DateTime.now().millisecondsSinceEpoch}';
-    FirebaseApp? secondaryApp;
-
-    try {
-      // 2. تهيئة التطبيق الثانوي بنفس إعدادات التطبيق الرئيسي
-      secondaryApp = await Firebase.initializeApp(
-        name: secondaryAppName,
-        options: Firebase.app().options,
-      );
-
-      // 3. إنشاء المستخدم الجديد باستخدام التطبيق الثانوي المعزول
-      final UserCredential userCredential =
-          await FirebaseAuth.instanceFor(app: secondaryApp)
-              .createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      final newUser = userCredential.user;
-      if (newUser != null) {
-        // 4. حفظ بيانات المستخدم الجديد في Firestore كالمعتاد
-        await _saveUserToFirestore(newUser.uid, admin.uid);
-        // يمكنك تحديث اسم العرض إذا أردت، ولكن هذا اختياري
-        // await newUser.updateDisplayName(_fullNameController.text.trim());
-
-        if (mounted) {
-          UIHelpers.showSuccessSnackBar(
-              context, 'تم إنشاء حساب لـ "${_fullNameController.text}" بنجاح!');
-          Navigator.of(context).pop(true); // العودة إلى الشاشة السابقة
-        }
-      }
-    } on FirebaseAuthException catch (e) {
-      _handleFirebaseAuthError(e);
-    } catch (e) {
-      UIHelpers.showErrorSnackBar(
-          context, 'حدث خطأ غير متوقع: ${e.toString()}');
-    } finally {
-      // 5. حذف التطبيق الثانوي لعدم ترك أي أثر وتنظيف الموارد
-      if (secondaryApp != null) {
-        await secondaryApp.delete();
-      }
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-  // ======================== الحل ينتهي هنا ========================
-
-  Future<void> _saveUserToFirestore(String newUserUid, String adminUid) async {
-    final userData = {
-      'uid': newUserUid,
-      'fullName': _fullNameController.text.trim(),
-      'email': _emailController.text.trim(),
-      'employeeId': _employeeIdController.text.trim(),
-      'role': 'technician', // تعيين دور "فني" بشكل افتراضي
-      'createdAt': Timestamp.now(),
-      'createdBy': adminUid,
-      'isActive': true,
-      'points': 0,
-      'tasksCompleted': 0,
-      'devicesRegistered': 0,
-    };
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(newUserUid)
-        .set(userData);
-  }
-
-  void _handleFirebaseAuthError(FirebaseAuthException e) {
-    String errorMessage = 'حدث خطأ غير متوقع';
-    if (e.code == 'weak-password') {
-      errorMessage = 'كلمة المرور ضعيفة جدًا.';
-    } else if (e.code == 'email-already-in-use') {
-      errorMessage = 'هذا البريد الإلكتروني مستخدم بالفعل.';
-    } else if (e.code == 'invalid-email') {
-      errorMessage = 'صيغة البريد الإلكتروني غير صحيحة.';
-    }
-    UIHelpers.showErrorSnackBar(context, errorMessage);
-  }
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -228,5 +144,103 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
             ),
     );
+  }
+
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي (Core Business Logic) - (أساسي)
+  // ===========================================================================
+
+  /// دالة لإنشاء حساب مستخدم جديد باستخدام تطبيق Firebase ثانوي معزول.
+  Future<void> _createUser() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final admin = FirebaseAuth.instance.currentUser;
+    if (admin == null) {
+      UIHelpers.showErrorSnackBar(context, "خطأ: المدير غير مسجل دخوله.");
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    String secondaryAppName =
+        'userCreation-${DateTime.now().millisecondsSinceEpoch}';
+    FirebaseApp? secondaryApp;
+
+    try {
+      secondaryApp = await Firebase.initializeApp(
+        name: secondaryAppName,
+        options: Firebase.app().options,
+      );
+
+      final UserCredential userCredential =
+          await FirebaseAuth.instanceFor(app: secondaryApp)
+              .createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      final newUser = userCredential.user;
+      if (newUser != null) {
+        await _saveUserToFirestore(newUser.uid, admin.uid);
+
+        if (mounted) {
+          UIHelpers.showSuccessSnackBar(
+              context, 'تم إنشاء حساب لـ "${_fullNameController.text}" بنجاح!');
+          Navigator.of(context).pop(true);
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      _handleFirebaseAuthError(e);
+    } catch (e) {
+      UIHelpers.showErrorSnackBar(
+          context, 'حدث خطأ غير متوقع: ${e.toString()}');
+    } finally {
+      if (secondaryApp != null) {
+        await secondaryApp.delete();
+      }
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // 5. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // ===========================================================================
+
+  /// دالة لحفظ بيانات المستخدم الجديد في Firestore.
+  Future<void> _saveUserToFirestore(String newUserUid, String adminUid) async {
+    final userData = {
+      'uid': newUserUid,
+      'fullName': _fullNameController.text.trim(),
+      'email': _emailController.text.trim(),
+      'employeeId': _employeeIdController.text.trim(),
+      'role': 'technician',
+      'createdAt': Timestamp.now(),
+      'createdBy': adminUid,
+      'isActive': true,
+      'points': 0,
+      'tasksCompleted': 0,
+      'devicesRegistered': 0,
+    };
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(newUserUid)
+        .set(userData);
+  }
+
+  /// دالة لترجمة أخطاء Firebase Auth إلى رسائل مفهومة للمستخدم.
+  void _handleFirebaseAuthError(FirebaseAuthException e) {
+    String errorMessage = 'حدث خطأ غير متوقع';
+    if (e.code == 'weak-password') {
+      errorMessage = 'كلمة المرور ضعيفة جدًا.';
+    } else if (e.code == 'email-already-in-use') {
+      errorMessage = 'هذا البريد الإلكتروني مستخدم بالفعل.';
+    } else if (e.code == 'invalid-email') {
+      errorMessage = 'صيغة البريد الإلكتروني غير صحيحة.';
+    }
+    UIHelpers.showErrorSnackBar(context, errorMessage);
   }
 }

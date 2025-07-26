@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import '../models/lab_model.dart'; // نموذج بيانات المعمل.
-// نموذج بيانات الجهاز.
-import 'package:uquts1/services/firebase_database_service.dart';
-import '../utils/device_form_constants.dart'; // ثوابت وقوائم مستخدمة في الفورم.
-import '../utils/ui_helpers.dart'; // دوال مساعدة لعرض عناصر واجهة المستخدم.
-import 'add_lab_screen.dart'; // شاشة إضافة معمل.
-import 'lab_details_screen.dart'; // شاشة تفاصيل المعمل.
+import '../models/lab_model.dart';
+import '../models/device_model.dart';
+import '../services/firebase_database_service.dart';
+import '../utils/device_form_constants.dart';
+import '../utils/ui_helpers.dart';
+import 'add_lab_screen.dart';
+import 'lab_details_screen.dart';
 
 //------------------------------------------------------------------------------
 
-/// ويدجت شاشة عرض المعامل، وهي StatefulWidget لإدارة الحالات الداخلية مثل التصفية والتحميل.
 class LabsScreen extends StatefulWidget {
   const LabsScreen({super.key});
 
@@ -19,83 +18,126 @@ class LabsScreen extends StatefulWidget {
 
 //------------------------------------------------------------------------------
 
-/// كلاس الحالة (State) الخاص بـ LabsScreen.
 class _LabsScreenState extends State<LabsScreen> {
-  // --- ثوابت لتنظيم الكود وتوحيد قيم التصميم ---
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   static const double _defaultPadding = 16.0;
   static const double _iconSize = 64.0;
 
-  //------------------------------------------------------------------------------
+  String? _selectedFloor;
+  String? _selectedCollege;
+  List<LabModel> _labs = [];
+  bool _isLoading = true;
+  String? _error;
 
-  // --- متغيرات الحالة (State Variables) ---
-  String? _selectedFloor; // لتخزين قيمة فلتر الدور المحددة.
-  String? _selectedCollege; // لتخزين قيمة فلتر الكلية المحددة.
-  List<LabModel> _labs = []; // قائمة لتخزين المعامل التي يتم عرضها بعد التصفية.
-  bool _isLoading = true; // لتتبع حالة التحميل.
-  String? _error; // لتخزين رسالة الخطأ في حال حدوثه.
-
-  //------------------------------------------------------------------------------
-
-  // --- قوائم الخيارات المنسدلة للتصفية ---
-  // يتم إضافة خيار "الكل" في بداية كل قائمة.
   final List<String> _floors = ['جميع الأدوار', ...DeviceFormConstants.floors];
   final List<String> _colleges = [
     'جميع الكليات',
     ...DeviceFormConstants.colleges
   ];
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // ===========================================================================
 
-  /// دالة initState: يتم استدعاؤها مرة واحدة عند إنشاء الويدجت.
   @override
   void initState() {
     super.initState();
-    // تعيين القيمة الافتراضية للفلاتر لتكون "الكل".
     _selectedFloor = _floors.first;
     _selectedCollege = _colleges.first;
-    _loadLabs(); // تحميل قائمة المعامل عند بدء تشغيل الشاشة.
+    _loadLabs();
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('المعامل'),
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
+      ),
+      body: Column(
+        children: [
+          _buildFilterSection(theme),
+          Expanded(child: _buildLabsList(theme)),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddLabScreen()),
+        ),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي والتنقل (Core Logic & Navigation) - (أساسي)
+  // ===========================================================================
 
   /// دالة غير متزامنة لتحميل قائمة المعامل بناءً على الفلاتر المحددة.
   Future<void> _loadLabs() async {
     try {
-      setState(() => _isLoading = true);
-      // جلب المعامل المصفاة من قاعدة البيانات.
+      if (mounted) setState(() => _isLoading = true);
       _labs = await _fetchFilteredLabs();
-      setState(() {
-        _isLoading = false;
-        _error = null; // إعادة تعيين الخطأ عند النجاح.
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = null;
+        });
+      }
     } catch (e) {
-      _handleLoadError(e); // التعامل مع أي خطأ يحدث أثناء التحميل.
+      if (mounted) {
+        _handleLoadError(e);
+      }
     }
   }
 
-  //------------------------------------------------------------------------------
+  /// دالة للانتقال إلى شاشة تفاصيل المعمل.
+  void _navigateToLabDetails(LabModel lab) {
+    if (lab.locationUrl == null || lab.locationUrl!.isEmpty) {
+      UIHelpers.showSnackBar(
+        context: context,
+        message: 'لم يتم تحديد موقع للمعمل',
+        type: SnackBarType.error,
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => LabDetailsScreen(lab: lab)),
+    );
+  }
+
+  // ===========================================================================
+  // 5. الدوال المساعدة والويدجتات الفرعية (Helpers & Sub-Widgets)
+  // ===========================================================================
 
   /// دالة مساعدة تحتوي على منطق جلب وتصفية المعامل من Firebase.
   Future<List<LabModel>> _fetchFilteredLabs() async {
     List<LabModel> labs;
 
-    // جلب المعامل حسب الكلية إذا تم تحديد كلية معينة.
     if (_selectedCollege != null && _selectedCollege != _colleges.first) {
       labs = await FirebaseDatabaseService.getLabsByCollege(_selectedCollege!);
     } else {
-      // وإلا، جلب جميع المعامل.
       labs = await FirebaseDatabaseService.getLabs();
     }
 
-    // تصفية النتائج حسب الدور (تتم هذه العملية في الذاكرة بعد جلب البيانات).
     if (_selectedFloor != null && _selectedFloor != _floors.first) {
       labs = labs.where((lab) => lab.floorNumber == _selectedFloor).toList();
     }
 
     return labs;
   }
-
-  //------------------------------------------------------------------------------
 
   /// دالة لمعالجة الأخطاء عند تحميل البيانات وعرض خيارات للمستخدم.
   void _handleLoadError(dynamic error) {
@@ -104,7 +146,6 @@ class _LabsScreenState extends State<LabsScreen> {
       _isLoading = false;
     });
 
-    // عرض ورقة سفلية بخيارات للمستخدم للتعامل مع الخطأ.
     UIHelpers.showBottomSheetOptions(
       context: context,
       title: 'خطأ في تحميل المعامل',
@@ -123,8 +164,6 @@ class _LabsScreenState extends State<LabsScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
   /// دالة لعرض تفاصيل الخطأ في ورقة سفلية.
   void _showErrorDetails() {
     UIHelpers.showBottomSheetOptions(
@@ -134,63 +173,11 @@ class _LabsScreenState extends State<LabsScreen> {
         BottomSheetOption(
           title: _error ?? 'خطأ غير معروف',
           icon: const Icon(Icons.info_outline),
-          onTap: () {}, // فقط لعرض النص.
+          onTap: () {},
         ),
       ],
     );
   }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة للانتقال إلى شاشة تفاصيل المعمل.
-  void _navigateToLabDetails(LabModel lab) {
-    // التحقق من وجود رابط للموقع قبل الانتقال.
-    if (lab.locationUrl == null || lab.locationUrl!.isEmpty) {
-      UIHelpers.showSnackBar(
-        context: context,
-        message: 'لم يتم تحديد موقع للمعمل',
-        type: SnackBarType.error,
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => LabDetailsScreen(lab: lab)),
-    );
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة بناء الواجهة الرئيسية للشاشة.
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('المعامل'),
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: theme.colorScheme.onPrimary,
-      ),
-      body: Column(
-        children: [
-          _buildFilterSection(theme), // بناء قسم الفلاتر العلوي.
-          // جعل قائمة المعامل تمتد لملء المساحة المتبقية.
-          Expanded(child: _buildLabsList(theme)),
-        ],
-      ),
-      // زر عائم لإضافة معمل جديد.
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddLabScreen()),
-        ),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  //------------------------------------------------------------------------------
 
   /// ويدجت مساعد لبناء قسم التصفية الذي يحتوي على القوائم المنسدلة.
   Widget _buildFilterSection(ThemeData theme) {
@@ -205,7 +192,7 @@ class _LabsScreenState extends State<LabsScreen> {
               items: _floors,
               onChanged: (value) {
                 setState(() => _selectedFloor = value);
-                _loadLabs(); // إعادة تحميل المعامل عند تغيير الفلتر.
+                _loadLabs();
               },
               hint: 'الدور',
             ),
@@ -217,7 +204,7 @@ class _LabsScreenState extends State<LabsScreen> {
               items: _colleges,
               onChanged: (value) {
                 setState(() => _selectedCollege = value);
-                _loadLabs(); // إعادة تحميل المعامل عند تغيير الفلتر.
+                _loadLabs();
               },
               hint: 'الكلية',
             ),
@@ -226,8 +213,6 @@ class _LabsScreenState extends State<LabsScreen> {
       ),
     );
   }
-
-  //------------------------------------------------------------------------------
 
   /// ويدجت مساعد لبناء قائمة المعامل، ويعمل كآلة حالة لعرض الواجهة المناسبة.
   Widget _buildLabsList(ThemeData theme) {
@@ -246,8 +231,6 @@ class _LabsScreenState extends State<LabsScreen> {
       itemBuilder: (context, index) => _buildLabItem(theme, _labs[index]),
     );
   }
-
-  //------------------------------------------------------------------------------
 
   /// ويدجت مساعد لبناء واجهة المستخدم في حالة حدوث خطأ.
   Widget _buildErrorView(ThemeData theme) {
@@ -270,8 +253,6 @@ class _LabsScreenState extends State<LabsScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
   /// ويدجت مساعد لبناء واجهة المستخدم في حالة عدم وجود معامل.
   Widget _buildEmptyView(ThemeData theme) {
     return Center(
@@ -293,8 +274,6 @@ class _LabsScreenState extends State<LabsScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
   /// ويدجت مساعد لبناء عنصر واحد (بطاقة) في قائمة المعامل.
   Widget _buildLabItem(ThemeData theme, LabModel lab) {
     return Card(
@@ -311,8 +290,6 @@ class _LabsScreenState extends State<LabsScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
   /// ويدجت مساعد لبناء الجزء الخلفي من عنصر القائمة، الذي يعرض الدور والحالة.
   Widget _buildLabStatusTrailing(LabModel lab) {
     return Row(
@@ -324,8 +301,6 @@ class _LabsScreenState extends State<LabsScreen> {
       ],
     );
   }
-
-  //------------------------------------------------------------------------------
 
   /// ويدجت مساعد لبناء أيقونة الحالة مع اللون المناسب.
   Widget _buildStatusIcon(LabStatus status) {
@@ -347,8 +322,6 @@ class _LabsScreenState extends State<LabsScreen> {
     }
     return Icon(icon, color: color);
   }
-
-  //------------------------------------------------------------------------------
 
   /// دالة مساعدة قابلة لإعادة الاستخدام لإنشاء قائمة منسدلة منسقة.
   Widget _buildDropdown(

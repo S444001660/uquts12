@@ -6,6 +6,7 @@ import '../models/device_model.dart';
 import '../models/user_account_model.dart';
 import '../models/user_role_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'add_lab_screen.dart';
 import 'add_device_screen.dart';
@@ -15,16 +16,15 @@ import 'labs_list_screen.dart';
 import 'devices_list_screen.dart';
 import 'admin/employee_management_screen.dart';
 import 'admin/reports_screen.dart';
-import 'admin/admin_tasks_history_screen.dart'; // <-- 1. استيراد شاشة سجل المهام
-import 'admin/admin_task_details_screen.dart'; // استيراد شاشة تفاصيل الأدمن
+import 'admin/admin_tasks_history_screen.dart';
+import 'admin/admin_task_details_screen.dart';
 import 'add_task.dart';
 import 'user_tasks_screen.dart';
 import '../services/firebase_database_service.dart';
 import 'task_details_screen.dart';
 import 'lab_details_screen.dart';
 import 'view_device_screen.dart';
-import '../screens/technician_stats_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'technician_stats_screen.dart';
 
 class UpdatedHomeScreen extends StatefulWidget {
   const UpdatedHomeScreen({super.key});
@@ -35,6 +35,10 @@ class UpdatedHomeScreen extends StatefulWidget {
 
 class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     with TickerProviderStateMixin {
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   bool _isLoading = true;
   List<RecentActivity> _recentActivities = [];
   List<Map<String, dynamic>> _userTasks = [];
@@ -45,6 +49,10 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   List<Map<String, dynamic>> assignedTasks = [];
 
   late TabController _tabController;
+
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
+  // ===========================================================================
 
   @override
   void initState() {
@@ -62,145 +70,9 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     super.dispose();
   }
 
-  Future<void> _loadUserAndData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      _currentUser = await PermissionsService.getCurrentUserInfo();
-      _currentUserRole = await PermissionsService.getCurrentUserRole();
-
-      await Future.wait([
-        _loadRecentActivities(),
-        _loadTasksForHomeScreen(),
-      ]);
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'حدث خطأ في تحميل البيانات: $e';
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  // دالة واحدة لجلب المهام بناءً على دور المستخدم
-  Future<void> _loadTasksForHomeScreen() async {
-    if (_currentUser == null) return;
-
-    try {
-      List<Map<String, dynamic>> tasks = [];
-      if (_currentUserRole == UserRole.technician) {
-        // الفني يرى مهامه النشطة
-        tasks = await TaskProgressService.getUserActiveTasks(_currentUser!.uid);
-        if (mounted) setState(() => _userTasks = tasks);
-      } else {
-        // الأدمن والمشرف يرون آخر 5 مهام قاموا بإنشائها
-        final snapshot = await FirebaseFirestore.instance
-            .collection('tasks')
-            .where('createdBy', isEqualTo: currentUserId)
-            .orderBy('createdAt', descending: true)
-            .limit(5) // <-- 2. تحديد عدد المهام بـ 5 فقط
-            .get();
-        tasks =
-            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
-        if (mounted) setState(() => assignedTasks = tasks);
-      }
-    } catch (e) {
-      debugPrint('خطأ في تحميل المهام للشاشة الرئيسية: $e');
-    }
-  }
-
-  Future<void> _loadRecentActivities() async {
-    final List<LabModel> labs = await FirebaseDatabaseService.getLabs();
-    final List<DeviceModel> devices =
-        await FirebaseDatabaseService.getDevices();
-    List<RecentActivity> allActivities = [];
-
-    Future<String?> _getUserName(String? uid) async {
-      if (uid == null) return null;
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      return userDoc.data()?['fullName'];
-    }
-
-    for (var lab in labs) {
-      final createdByName = await _getUserName(lab.createdBy);
-      allActivities.add(RecentActivity(
-        id: lab.id,
-        title:
-            'إضافة معمل ${lab.labNumber} بواسطة ${createdByName ?? "غير معروف"}',
-        type: 'lab',
-        timestamp: lab.createdAt,
-        originalObject: lab,
-      ));
-    }
-
-    for (var device in devices) {
-      final createdByName = await _getUserName(device.createdBy);
-      allActivities.add(RecentActivity(
-        id: device.id,
-        title:
-            'إضافة جهاز "${device.name}" بواسطة ${createdByName ?? "غير معروف"}',
-        type: 'device',
-        timestamp: device.createdAt,
-        originalObject: device,
-      ));
-    }
-
-    allActivities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    if (mounted) {
-      setState(() {
-        _recentActivities = allActivities.take(5).toList();
-      });
-    }
-  }
-
-  String _formatTimestamp(DateTime timestamp) {
-    final difference = DateTime.now().difference(timestamp);
-    if (difference.inDays > 0) {
-      return 'قبل ${difference.inDays} يوم';
-    } else if (difference.inHours > 0) {
-      return 'قبل ${difference.inHours} ساعة';
-    } else if (difference.inMinutes > 0) {
-      return 'قبل ${difference.inMinutes} دقيقة';
-    } else {
-      return 'الآن';
-    }
-  }
-
-  void _onNavBarTapped(int index) {
-    Widget page;
-    switch (index) {
-      case 0:
-        page = const LabsListScreen();
-        break;
-      case 1:
-        page = const DevicesListScreen();
-        break;
-      case 2:
-        page = const BarcodeScannerScreen();
-        break;
-      case 3:
-        page = const SettingsScreen();
-        break;
-      default:
-        return;
-    }
-    Navigator.push(context, MaterialPageRoute(builder: (context) => page))
-        .then((_) => _loadUserAndData());
-  }
-
-  void _navigateAndReload(Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => screen))
-        .then((_) => _loadUserAndData());
-  }
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -235,53 +107,67 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     );
   }
 
-  Widget _buildCustomTabBar(ThemeData theme) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.all(5.0),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12.0),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          borderRadius: BorderRadius.circular(10.0),
-          color: theme.colorScheme.primary,
-        ),
-        labelColor: theme.colorScheme.onPrimary,
-        unselectedLabelColor: theme.colorScheme.primary,
-        labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-        indicatorSize: TabBarIndicatorSize.tab,
-        splashBorderRadius: BorderRadius.circular(10.0),
-        tabs: const [
-          Tab(text: 'آخر العمليات'),
-          Tab(text: 'المهام'),
-        ],
-      ),
-    );
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي والتنقل (Core Logic & Navigation)
+  // ===========================================================================
+
+  Future<void> _loadUserAndData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      _currentUser = await PermissionsService.getCurrentUserInfo();
+      _currentUserRole = await PermissionsService.getCurrentUserRole();
+
+      await Future.wait([
+        _loadRecentActivitiesOptimized(), // *** [تم التعديل] *** استخدام الدالة المحسّنة
+        _loadTasksForHomeScreen(),
+      ]);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'حدث خطأ في تحميل البيانات: $e';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  Widget _buildBottomNavBar(ThemeData theme) {
-    return BottomNavigationBar(
-      onTap: _onNavBarTapped,
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: theme.colorScheme.surface,
-      selectedItemColor: Colors.grey,
-      unselectedItemColor: Colors.grey,
-      showUnselectedLabels: true,
-      items: const [
-        BottomNavigationBarItem(
-            icon: Icon(Icons.science_outlined), label: 'المعامل'),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.computer_outlined), label: 'الأجهزة'),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code_scanner), label: 'مسح'),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.more_horiz_outlined), label: 'المزيد'),
-      ],
-    );
+  void _onNavBarTapped(int index) {
+    Widget page;
+    switch (index) {
+      case 0:
+        page = const LabsListScreen();
+        break;
+      case 1:
+        page = const DevicesListScreen();
+        break;
+      case 2:
+        page = const BarcodeScannerScreen();
+        break;
+      case 3:
+        page = const SettingsScreen();
+        break;
+      default:
+        return;
+    }
+    _navigateAndReload(page);
   }
+
+  void _navigateAndReload(Widget screen) {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => screen))
+        .then((_) => _loadUserAndData());
+  }
+
+  // ===========================================================================
+  // 5. دوال بناء مكونات الواجهة (UI Builder Methods)
+  // ===========================================================================
 
   Widget _buildUserInfoHeader(ThemeData theme) {
     final double topPadding = MediaQuery.of(context).padding.top;
@@ -322,11 +208,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.star,
-                        color: Colors.amber,
-                        size: 16,
-                      ),
+                      const Icon(Icons.star, color: Colors.amber, size: 16),
                       const SizedBox(width: 4),
                       Text(
                         '${_currentUser!.points} نقطة',
@@ -359,56 +241,42 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     );
   }
 
-  Widget _buildQuickActions() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 24.0),
-      child: _buildActionButtons(),
-    );
-  }
-
-  Widget _buildActionButtons() {
-    List<_HomeButton> buttons = [];
-
-    buttons.addAll([
-      _HomeButton(Icons.add_business_outlined, 'إضافة معمل',
-          () => _navigateAndReload(const AddLabScreen())),
-      _HomeButton(Icons.add_to_queue_outlined, 'إضافة جهاز',
-          () => _navigateAndReload(const AddDeviceScreen())),
-    ]);
-
-    if (_currentUserRole == UserRole.admin ||
-        _currentUserRole == UserRole.supervisor) {
-      buttons.add(_HomeButton(Icons.assignment_add, 'إسناد مهمة',
-          () => _navigateAndReload(const ImprovedAddTaskScreen())));
-    }
-
-    // تم نقل سجل المهام و التقارير و إدارة الموظفين
-    // تم نقل مهامي و احصائياتي لصفحة المزيد
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          double itemWidth = (constraints.maxWidth - 24) / 4;
-
-          return Wrap(
-            spacing: 8,
-            runSpacing: 12,
-            children: buttons.map((btn) {
-              return SizedBox(
-                width: itemWidth,
-                child: _buildStyledButton(btn),
-              );
-            }).toList(),
-          );
-        },
+  Widget _buildCustomTabBar(ThemeData theme) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.all(5.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicator: BoxDecoration(
+          borderRadius: BorderRadius.circular(10.0),
+          color: theme.colorScheme.primary,
+        ),
+        labelColor: theme.colorScheme.onPrimary,
+        unselectedLabelColor: theme.colorScheme.primary,
+        labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+        indicatorSize: TabBarIndicatorSize.tab,
+        splashBorderRadius: BorderRadius.circular(10.0),
+        tabs: const [
+          Tab(text: 'آخر العمليات'),
+          Tab(text: 'المهام'),
+        ],
       ),
     );
   }
 
+  /// *** [تم التصحيح] *** بناء قسم آخر العمليات مع حواف ثابتة
   Widget _buildRecentActivitiesSection(ThemeData theme) {
     return Container(
       key: const ValueKey<int>(0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -447,62 +315,73 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     );
   }
 
-  Widget _buildUserTasksList(ThemeData theme) {
-    if (_userTasks.isEmpty) {
-      return const Center(child: Text('لا توجد مهام نشطة حالياً.'));
-    }
-    return ListView.separated(
-      itemCount: _userTasks.length,
-      itemBuilder: (context, index) {
-        final taskData = _userTasks[index];
-        final mainTask = taskData['mainTask'];
-        final userTask = taskData['userTask'];
-        return ListTile(
-          title: Text(mainTask['typeDisplayName'] ?? 'مهمة'),
-          onTap: () => _navigateAndReload(TaskDetailsScreen(
-            taskId: mainTask['id'],
-            userTaskId: userTask['id'],
-          )),
-        );
-      },
-      separatorBuilder: (context, index) =>
-          const Divider(height: 1, indent: 16, endIndent: 16),
+  Widget _buildQuickActions() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 24.0),
+      child: _buildActionButtons(),
     );
   }
 
-  Widget _buildAdminAssignedTasksList(ThemeData theme) {
-    if (assignedTasks.isEmpty) {
-      return const Center(child: Text('لم تقم بإسناد أي مهام مؤخراً.'));
+  Widget _buildBottomNavBar(ThemeData theme) {
+    return BottomNavigationBar(
+      onTap: _onNavBarTapped,
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: theme.colorScheme.surface,
+      selectedItemColor: Colors.grey,
+      unselectedItemColor: Colors.grey,
+      showUnselectedLabels: true,
+      items: const [
+        BottomNavigationBarItem(
+            icon: Icon(Icons.science_outlined), label: 'المعامل'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.computer_outlined), label: 'الأجهزة'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.qr_code_scanner), label: 'مسح'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.more_horiz_outlined), label: 'المزيد'),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    List<_HomeButton> buttons = [];
+
+    buttons.addAll([
+      _HomeButton(Icons.add_business_outlined, 'إضافة معمل',
+          () => _navigateAndReload(const AddLabScreen())),
+      _HomeButton(Icons.add_to_queue_outlined, 'إضافة جهاز',
+          () => _navigateAndReload(const AddDeviceScreen())),
+    ]);
+
+    if (_currentUserRole == UserRole.admin ||
+        _currentUserRole == UserRole.supervisor) {
+      buttons.add(_HomeButton(Icons.assignment_add, 'إسناد مهمة',
+          () => _navigateAndReload(const ImprovedAddTaskScreen())));
     }
-    return ListView.separated(
-      itemCount: assignedTasks.length,
-      separatorBuilder: (context, index) =>
-          const Divider(height: 1, indent: 16, endIndent: 16),
-      itemBuilder: (context, index) {
-        final task = assignedTasks[index];
-        return ListTile(
-          title: Text(task['typeDisplayName'] ?? 'مهمة'),
-          subtitle: Text(task['notes'] ?? 'لا توجد ملاحظات',
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AdminTaskDetailsScreen(task: task),
-              ),
-            );
-          },
-        );
-      },
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          double itemWidth = (constraints.maxWidth - 24) / 4;
+          return Wrap(
+            spacing: 8,
+            runSpacing: 12,
+            children: buttons.map((btn) {
+              return SizedBox(
+                width: itemWidth,
+                child: _buildStyledButton(btn),
+              );
+            }).toList(),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildActivitiesList(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300)),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(11),
       child: ListView.separated(
         itemCount: _recentActivities.length,
         itemBuilder: (context, index) {
@@ -515,17 +394,85 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     );
   }
 
+  Widget _buildUserTasksList(ThemeData theme) {
+    if (_userTasks.isEmpty) {
+      return const Center(child: Text('لا توجد مهام نشطة حالياً.'));
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(11),
+      child: ListView.separated(
+        itemCount: _userTasks.length,
+        itemBuilder: (context, index) {
+          final taskData = _userTasks[index];
+          final mainTask = taskData['mainTask'];
+          final userTask = taskData['userTask'];
+
+          final progress =
+              (mainTask['targetCount'] != null && mainTask['targetCount'] > 0)
+                  ? (userTask['progress'] ?? 0.0) / mainTask['targetCount']
+                  : null;
+
+          return _buildTaskTile(
+            icon: _getIconForTaskType(mainTask['type']),
+            title: mainTask['typeDisplayName'] ?? 'مهمة',
+            subtitle: Text('الكلية: ${mainTask['college'] ?? 'غير محدد'}'),
+            progress: progress,
+            onTap: () => _navigateAndReload(TaskDetailsScreen(
+              taskId: mainTask['id'],
+              userTaskId: userTask['id'],
+            )),
+            theme: theme,
+          );
+        },
+        separatorBuilder: (context, index) =>
+            const Divider(height: 1, indent: 16, endIndent: 16),
+      ),
+    );
+  }
+
+  Widget _buildAdminAssignedTasksList(ThemeData theme) {
+    if (assignedTasks.isEmpty) {
+      return const Center(child: Text('لم تقم بإسناد أي مهام مؤخراً.'));
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(11),
+      child: ListView.separated(
+        itemCount: assignedTasks.length,
+        separatorBuilder: (context, index) =>
+            const Divider(height: 1, indent: 16, endIndent: 16),
+        itemBuilder: (context, index) {
+          final task = assignedTasks[index];
+          final assignedCount = (task['assignedTo'] as List?)?.length ?? 0;
+
+          return _buildTaskTile(
+            icon: _getIconForTaskType(task['type']),
+            title: task['typeDisplayName'] ?? 'مهمة',
+            subtitle: Text(
+                'الكلية: ${task['college'] ?? 'غير محدد'} | المسند إلى: $assignedCount فنيين'),
+            progress: task['completionPercentage']?.toDouble() ?? 0.0,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AdminTaskDetailsScreen(task: task),
+                ),
+              );
+            },
+            theme: theme,
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildActivityTile(RecentActivity activity, ThemeData theme) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: const Icon(Icons.chevron_left, color: Colors.grey),
       title: Text(activity.title,
           style: theme.textTheme.titleMedium, textAlign: TextAlign.right),
-      subtitle: Text(
-        _formatTimestamp(activity.timestamp),
-        style: theme.textTheme.bodySmall,
-        textAlign: TextAlign.right,
-      ),
+      subtitle: Text(_formatTimestamp(activity.timestamp),
+          style: theme.textTheme.bodySmall, textAlign: TextAlign.right),
       trailing: CircleAvatar(
         backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
         child: Icon(
@@ -538,51 +485,63 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       onTap: () {
         if (activity.type == 'lab') {
           Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => LabDetailsScreen(lab: activity.originalObject),
-            ),
-          );
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      LabDetailsScreen(lab: activity.originalObject)));
         } else if (activity.type == 'device') {
           Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ViewDeviceScreen(device: activity.originalObject),
-            ),
-          );
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      ViewDeviceScreen(device: activity.originalObject)));
         }
       },
     );
   }
 
-  Widget _buildErrorState(ThemeData theme, String errorMessage) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: theme.colorScheme.error.withOpacity(0.5))),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 16.0),
+  Widget _buildTaskTile({
+    required IconData icon,
+    required String title,
+    required Widget subtitle,
+    required VoidCallback onTap,
+    double? progress,
+    required ThemeData theme,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      leading: const Icon(Icons.chevron_left, color: Colors.grey),
+      title: Text(title,
+          style: theme.textTheme.titleMedium, textAlign: TextAlign.right),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Icon(Icons.error_outline, color: theme.colorScheme.error, size: 40),
-            const SizedBox(height: 16),
-            Text(errorMessage,
-                style: theme.textTheme.titleMedium,
-                textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            TextButton(
-                onPressed: _loadUserAndData,
-                child: const Text('إعادة المحاولة'))
+            subtitle,
+            if (progress != null) ...[
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: progress,
+                backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
+                color: theme.colorScheme.primary,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ]
           ],
         ),
       ),
+      trailing: CircleAvatar(
+        backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+        child: Icon(icon, color: theme.colorScheme.primary),
+      ),
+      onTap: onTap,
     );
   }
 
   Widget _buildStyledButton(_HomeButton btn) {
     final theme = Theme.of(context);
-
     return GestureDetector(
       onTap: btn.onTap,
       child: Container(
@@ -613,7 +572,182 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       ),
     );
   }
+
+  Widget _buildErrorState(ThemeData theme, String errorMessage) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: theme.colorScheme.error.withOpacity(0.5))),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 16.0),
+        child: Column(
+          children: [
+            Icon(Icons.error_outline, color: theme.colorScheme.error, size: 40),
+            const SizedBox(height: 16),
+            Text(errorMessage,
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            TextButton(
+                onPressed: _loadUserAndData,
+                child: const Text('إعادة المحاولة'))
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 6. دوال تحميل البيانات والمساعدة (Data & Helper Functions)
+  // ===========================================================================
+
+  Future<void> _loadTasksForHomeScreen() async {
+    if (_currentUser == null) return;
+    try {
+      List<Map<String, dynamic>> tasks = [];
+      if (_currentUserRole == UserRole.technician) {
+        tasks = await TaskProgressService.getUserActiveTasks(_currentUser!.uid);
+        if (mounted) setState(() => _userTasks = tasks);
+      } else {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('tasks')
+            .where('createdBy', isEqualTo: currentUserId)
+            .orderBy('createdAt', descending: true)
+            .limit(5)
+            .get();
+        tasks =
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+        if (mounted) setState(() => assignedTasks = tasks);
+      }
+    } catch (e) {
+      debugPrint('خطأ في تحميل المهام للشاشة الرئيسية: $e');
+    }
+  }
+
+  /// *** [تم التحسين] *** تحميل آخر الأنشطة بطريقة سريعة وفعالة.
+  Future<void> _loadRecentActivitiesOptimized() async {
+    List<RecentActivity> allActivities = [];
+    final firestore = FirebaseFirestore.instance;
+
+    // 1. جلب آخر 5 معامل وأجهزة بشكل متوازٍ
+    final results = await Future.wait([
+      firestore
+          .collection('labs')
+          .orderBy('createdAt', descending: true)
+          .limit(5)
+          .get(),
+      firestore
+          .collection('devices')
+          .orderBy('createdAt', descending: true)
+          .limit(5)
+          .get(),
+    ]);
+
+    final labDocs = results[0].docs;
+    final deviceDocs = results[1].docs;
+
+    // 2. تحويل وثائق المعامل إلى كائنات
+    for (var doc in labDocs) {
+      final lab = LabModel.fromMap(doc.data());
+      allActivities.add(RecentActivity(
+        id: lab.id,
+        title: 'إضافة معمل ${lab.labNumber}', // سيتم تحديث الاسم لاحقًا
+        type: 'lab',
+        timestamp: lab.createdAt,
+        originalObject: lab,
+        createdBy: lab.createdBy,
+      ));
+    }
+
+    // 3. تحويل وثائق الأجهزة إلى كائنات
+    for (var doc in deviceDocs) {
+      final device = DeviceModel.fromMap(doc.data());
+      allActivities.add(RecentActivity(
+        id: device.id,
+        title: 'إضافة جهاز "${device.name}"', // سيتم تحديث الاسم لاحقًا
+        type: 'device',
+        timestamp: device.createdAt,
+        originalObject: device,
+        createdBy: device.createdBy,
+      ));
+    }
+
+    // 4. جلب أسماء المستخدمين دفعة واحدة (أكثر كفاءة)
+    final userIds = allActivities
+        .map((a) => a.createdBy)
+        .where((id) => id != null)
+        .toSet()
+        .toList();
+    final userNames = await _getUserNames(userIds);
+
+    // 5. تحديث عناوين الأنشطة بأسماء المستخدمين
+    for (var activity in allActivities) {
+      final creatorName = userNames[activity.createdBy] ?? 'غير معروف';
+      if (activity.type == 'lab') {
+        activity.title =
+            'إضافة معمل ${(activity.originalObject as LabModel).labNumber} بواسطة $creatorName';
+      } else {
+        activity.title =
+            'إضافة جهاز "${(activity.originalObject as DeviceModel).name}" بواسطة $creatorName';
+      }
+    }
+
+    // 6. فرز الأنشطة المدمجة وأخذ أحدث 5
+    allActivities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    if (mounted) {
+      setState(() {
+        _recentActivities = allActivities.take(5).toList();
+      });
+    }
+  }
+
+  /// دالة مساعدة لجلب أسماء عدة مستخدمين دفعة واحدة.
+  Future<Map<String, String>> _getUserNames(List<String?> userIds) async {
+    if (userIds.isEmpty) return {};
+    final Map<String, String> userNames = {};
+    final userDocs = await FirebaseFirestore.instance
+        .collection('users')
+        .where(FieldPath.documentId, whereIn: userIds)
+        .get();
+    for (var doc in userDocs.docs) {
+      userNames[doc.id] = doc.data()['fullName'] ?? 'غير معروف';
+    }
+    return userNames;
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final difference = DateTime.now().difference(timestamp);
+    if (difference.inDays > 0) {
+      return 'قبل ${difference.inDays} يوم';
+    } else if (difference.inHours > 0) {
+      return 'قبل ${difference.inHours} ساعة';
+    } else if (difference.inMinutes > 0) {
+      return 'قبل ${difference.inMinutes} دقيقة';
+    } else {
+      return 'الآن';
+    }
+  }
+
+  IconData _getIconForTaskType(String? taskType) {
+    switch (taskType) {
+      case 'deviceRegistration':
+        return Icons.app_registration;
+      case 'maintenance':
+        return Icons.build_outlined;
+      case 'inspection':
+        return Icons.search_outlined;
+      case 'setup':
+        return Icons.settings_outlined;
+      default:
+        return Icons.assignment_outlined;
+    }
+  }
 }
+
+// ===========================================================================
+// 7. كلاسات مساعدة (Helper Classes)
+// ===========================================================================
 
 class _HomeButton {
   final IconData icon;
@@ -624,11 +758,12 @@ class _HomeButton {
 }
 
 class RecentActivity {
-  final String id;
-  final String title;
-  final String type;
-  final DateTime timestamp;
-  final dynamic originalObject;
+  String id;
+  String title;
+  String type;
+  DateTime timestamp;
+  dynamic originalObject;
+  String? createdBy;
 
   RecentActivity({
     required this.id,
@@ -636,5 +771,6 @@ class RecentActivity {
     required this.type,
     required this.timestamp,
     required this.originalObject,
+    this.createdBy,
   });
 }

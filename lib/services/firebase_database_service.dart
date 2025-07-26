@@ -1,13 +1,16 @@
+// استيراد المكتبات الضرورية
+import 'dart:io';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
-import 'dart:io';
-import 'package:uuid/uuid.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/task_progress_service.dart'; // <-- تم إضافة الاستيراد الناقص
+import 'package:uuid/uuid.dart';
+
+// --- تأكد من أن هذه المسارات صحيحة في مشروعك ---
 import '../models/lab_model.dart';
 import '../models/device_model.dart';
 import '../models/user_account_model.dart';
+import '../services/task_progress_service.dart'; // استيراد خدمة تتبع المهام
 
 //------------------------------------------------------------------------------
 
@@ -20,7 +23,7 @@ class FirebaseDatabaseService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // ===========================================================================
-  //           عمليات حسابات المستخدمين (User Accounts)
+  //                           عمليات حسابات المستخدمين (User Accounts)
   // ===========================================================================
 
   /// إضافة بيانات مستخدم جديد إلى مجموعة 'users' في Firestore.
@@ -60,12 +63,13 @@ class FirebaseDatabaseService {
   }
 
   // ===========================================================================
-  //           عمليات المعامل (Labs)
+  //                           عمليات المعامل (Labs)
   // ===========================================================================
 
   /// إضافة معمل جديد أو تحديث بيانات معمل موجود.
   static Future<void> addOrUpdateLab(LabModel lab) async {
     try {
+      // التحقق من صحة البيانات الأساسية قبل إرسالها
       if (lab.id.isEmpty ||
           lab.labNumber.isEmpty ||
           lab.college.isEmpty ||
@@ -75,6 +79,7 @@ class FirebaseDatabaseService {
 
       final Map<String, dynamic> labData = lab.toMap();
 
+      // رفع الصورة فقط إذا كان المسار محليًا وليس رابط URL
       if (lab.imagePath != null &&
           lab.imagePath!.isNotEmpty &&
           !lab.imagePath!.startsWith('http')) {
@@ -97,8 +102,10 @@ class FirebaseDatabaseService {
   /// حذف معمل وجميع البيانات المرتبطة به.
   static Future<void> deleteLab(String labId) async {
     try {
+      // حذف وثيقة المعمل
       await _firestore.collection('labs').doc(labId).delete();
 
+      // تحديث الأجهزة المرتبطة بالمعمل لإزالة الارتباط
       final devicesSnapshot = await _firestore
           .collection('devices')
           .where('labId', isEqualTo: labId)
@@ -109,6 +116,7 @@ class FirebaseDatabaseService {
       }
       await batch.commit();
 
+      // حذف صورة المعمل من Storage
       await _deleteImageFromFirebaseStorage('lab_images/$labId');
       debugPrint('تم حذف المعمل بنجاح: $labId');
     } catch (e) {
@@ -185,16 +193,36 @@ class FirebaseDatabaseService {
     }
   }
 
+  /// التحقق مما إذا كان رقم المعمل موجودًا مسبقًا.
+  static Future<bool> isLabNumberExists(String labNumber,
+      {String? excludeId}) async {
+    try {
+      Query query = _firestore
+          .collection('labs')
+          .where('labNumber', isEqualTo: labNumber);
+
+      // في حالة التعديل، استثني المعمل الحالي من البحث
+      if (excludeId != null) {
+        query = query.where(FieldPath.documentId, isNotEqualTo: excludeId);
+      }
+
+      final snapshot = await query.limit(1).get();
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('خطأ في التحقق من وجود رقم المعمل: $e');
+      return false; // نفترض عدم وجوده في حالة الخطأ لتجنب منع المستخدم
+    }
+  }
+
   // ===========================================================================
-  //           عمليات الأجهزة (Devices)
+  //                           عمليات الأجهزة (Devices)
   // ===========================================================================
 
-  /// إضافة جهاز جديد أو تحديث بيانات جهاز موجود. (النسخة المدمجة والمصححة)
+  /// إضافة جهاز جديد أو تحديث بيانات جهاز موجود.
   static Future<void> addOrUpdateDevice(DeviceModel device) async {
     try {
       final Map<String, dynamic> deviceData = device.toMap();
       final currentUser = _auth.currentUser;
-      // طريقة أفضل لتحديد إذا كان الجهاز جديدًا
       final isNewDevice = device.createdAt.isAtSameMomentAs(device.updatedAt);
 
       if (device.imagePath != null &&
@@ -210,12 +238,10 @@ class FirebaseDatabaseService {
           .doc(device.id)
           .set(deviceData, SetOptions(merge: true));
 
-      // تحديث حالة المعمل المرتبط بالجهاز فقط إذا كان هناك معمل
       if (device.labId.isNotEmpty) {
         await updateLabStatus(device.labId);
       }
 
-      // تحديث إحصائيات المستخدم والمهام (فقط للأجهزة الجديدة)
       if (isNewDevice && currentUser != null) {
         await updateUserStatsOnDeviceAdd(currentUser.uid);
       }
@@ -227,7 +253,7 @@ class FirebaseDatabaseService {
     }
   }
 
-  /// تحديث إحصائيات المستخدم عند إضافة جهاز جديد
+  /// تحديث إحصائيات المستخدم عند إضافة جهاز جديد.
   static Future<void> updateUserStatsOnDeviceAdd(String userId) async {
     try {
       await _firestore.collection('users').doc(userId).update({
@@ -235,7 +261,6 @@ class FirebaseDatabaseService {
         'lastDeviceRegistered': Timestamp.now(),
       });
 
-      // استدعاء خدمة تحديث المهام مع تمرير معرف المستخدم
       await TaskProgressService.updateDeviceRegistrationProgress(userId);
 
       debugPrint('تم تحديث إحصائيات المستخدم وتقدم المهام');
@@ -377,7 +402,7 @@ class FirebaseDatabaseService {
   }
 
   // ===========================================================================
-  //           دوال مساعدة (Helpers)
+  //                           دوال مساعدة (Helpers)
   // ===========================================================================
 
   /// دالة عامة لرفع ملف صورة إلى Firebase Storage.

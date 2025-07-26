@@ -1,10 +1,12 @@
-// استيراد المكتبات والملفات الضرورية
-import 'package:cloud_firestore/cloud_firestore.dart'; // مكتبة Firebase Firestore للتعامل مع قاعدة البيانات
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:equatable/equatable.dart'; // <-- 1. استيراد الحزمة الجديدة
 
 //------------------------------------------------------------------------------
 
 /// نموذج بيانات (Data Model) يمثل "الجهاز" داخل النظام.
-class DeviceModel {
+/// يرث من Equatable لضمان المقارنة الصحيحة بين الكائنات.
+class DeviceModel extends Equatable {
+  // <-- 2. جعله يرث من Equatable
   // --- الخصائص الأساسية للجهاز ---
   final String id;
   final String name;
@@ -33,11 +35,11 @@ class DeviceModel {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? imagePath;
-  final String? createdBy; // <-- الحقل الجديد الذي تم دمجه
+  final String? createdBy;
+  final String? createdByName; // <-- 3. إضافة الحقل الجديد لتحسين الأداء
 
   //------------------------------------------------------------------------------
 
-  /// البناء (Constructor) لإنشاء كائن جديد من نوع DeviceModel.
   const DeviceModel({
     required this.id,
     required this.name,
@@ -62,12 +64,19 @@ class DeviceModel {
     required this.createdAt,
     required this.updatedAt,
     this.imagePath,
-    this.createdBy, // <-- تمت إضافته هنا
+    this.createdBy,
+    this.createdByName, // <-- 4. إضافته للبناء
   });
 
   //------------------------------------------------------------------------------
 
-  /// دالة لتحويل الكائن إلى خريطة (Map) لتخزينها في Firestore.
+  /// *** [مهم] *** تحديد الخصائص التي سيتم استخدامها للمقارنة بين كائنين.
+  /// هنا، نعتبر أن جهازين متساويين إذا كان لهما نفس الـ id.
+  @override
+  List<Object?> get props => [id];
+
+  //------------------------------------------------------------------------------
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -93,13 +102,13 @@ class DeviceModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'imagePath': imagePath,
-      'createdBy': createdBy, // <-- تمت إضافته هنا
+      'createdBy': createdBy,
+      'createdByName': createdByName, // <-- 5. إضافته للخريطة
     };
   }
 
   //------------------------------------------------------------------------------
 
-  /// دالة مصنع (Factory) لبناء الكائن من خريطة (Map) قادمة من Firestore.
   factory DeviceModel.fromMap(Map<String, dynamic> map) {
     DateTime parseDateTime(dynamic value) {
       if (value is Timestamp) {
@@ -132,13 +141,13 @@ class DeviceModel {
       createdAt: parseDateTime(map['createdAt']),
       updatedAt: parseDateTime(map['updatedAt']),
       imagePath: map['imagePath'],
-      createdBy: map['createdBy'], // <-- تمت إضافته هنا
+      createdBy: map['createdBy'],
+      createdByName: map['createdByName'], // <-- 6. إضافته هنا
     );
   }
 
   //------------------------------------------------------------------------------
 
-  /// دالة لإنشاء نسخة جديدة من الجهاز مع تعديل بعض القيم.
   DeviceModel copyWith({
     String? id,
     String? name,
@@ -163,7 +172,8 @@ class DeviceModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? imagePath,
-    String? createdBy, // <-- تمت إضافته هنا
+    String? createdBy,
+    String? createdByName, // <-- 7. إضافته هنا
   }) {
     return DeviceModel(
       id: id ?? this.id,
@@ -189,7 +199,8 @@ class DeviceModel {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       imagePath: imagePath ?? this.imagePath,
-      createdBy: createdBy ?? this.createdBy, // <-- تمت إضافته هنا
+      createdBy: createdBy ?? this.createdBy,
+      createdByName: createdByName ?? this.createdByName, // <-- 8. إضافته هنا
     );
   }
 }

@@ -1,21 +1,27 @@
-// models/task_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:equatable/equatable.dart';
+
+//------------------------------------------------------------------------------
 
 enum TaskStatus { pending, inProgress, completed, overdue }
 
-class TaskModel {
+//------------------------------------------------------------------------------
+
+/// نموذج بيانات يمثل "المهمة الرئيسية" ويرث من Equatable.
+class TaskModel extends Equatable {
   final String id;
   final String type;
   final String typeDisplayName;
   final String? college;
-  final List<String> assignedTo; // قائمة معرفات المستخدمين
+  final List<String> assignedTo;
   final String notes;
-  final int? targetCount; // للمهام القابلة للقياس (مثل تسجيل 30 جهاز)
-  final int currentCount; // العدد الحالي المنجز
+  final int? targetCount;
+  final int currentCount;
   final bool isCompleted;
   final double completionPercentage;
   final DateTime createdAt;
   final String? createdBy;
+  final String? createdByName; // <-- 1. تمت الإضافة لتحسين الأداء
   final DateTime? completedAt;
   final TaskStatus status;
 
@@ -32,9 +38,13 @@ class TaskModel {
     this.completionPercentage = 0.0,
     required this.createdAt,
     this.createdBy,
+    this.createdByName, // <-- 2. تمت الإضافة للبناء
     this.completedAt,
     this.status = TaskStatus.pending,
   });
+
+  @override
+  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {
@@ -50,6 +60,7 @@ class TaskModel {
       'completionPercentage': completionPercentage,
       'createdAt': Timestamp.fromDate(createdAt),
       'createdBy': createdBy,
+      'createdByName': createdByName, // <-- 3. تمت الإضافة للخريطة
       'completedAt':
           completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'status': status.name,
@@ -70,6 +81,7 @@ class TaskModel {
       completionPercentage: (map['completionPercentage'] ?? 0.0).toDouble(),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       createdBy: map['createdBy'],
+      createdByName: map['createdByName'], // <-- 4. تمت الإضافة هنا
       completedAt: map['completedAt'] != null
           ? (map['completedAt'] as Timestamp).toDate()
           : null,
@@ -93,6 +105,7 @@ class TaskModel {
     double? completionPercentage,
     DateTime? createdAt,
     String? createdBy,
+    String? createdByName, // <-- 5. تمت الإضافة هنا
     DateTime? completedAt,
     TaskStatus? status,
   }) {
@@ -109,12 +122,13 @@ class TaskModel {
       completionPercentage: completionPercentage ?? this.completionPercentage,
       createdAt: createdAt ?? this.createdAt,
       createdBy: createdBy ?? this.createdBy,
+      createdByName:
+          createdByName ?? this.createdByName, // <-- 6. تمت الإضافة هنا
       completedAt: completedAt ?? this.completedAt,
       status: status ?? this.status,
     );
   }
 
-  // حساب النسبة المئوية للإنجاز
   double calculateProgress() {
     if (targetCount == null || targetCount! <= 0) {
       return isCompleted ? 100.0 : 0.0;
@@ -122,7 +136,6 @@ class TaskModel {
     return (currentCount / targetCount!) * 100;
   }
 
-  // تحديث تقدم المهمة
   TaskModel updateProgress(int newCount) {
     final newPercentage = calculateProgress();
     final completed = targetCount != null && newCount >= targetCount!;
@@ -138,8 +151,10 @@ class TaskModel {
   }
 }
 
-// نموذج مهام المستخدم الفردية
-class UserTaskModel {
+//------------------------------------------------------------------------------
+
+/// نموذج مهام المستخدم الفردية ويرث من Equatable.
+class UserTaskModel extends Equatable {
   final String id;
   final String taskId;
   final String userId;
@@ -157,6 +172,9 @@ class UserTaskModel {
     required this.assignedAt,
     this.completedAt,
   });
+
+  @override
+  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {

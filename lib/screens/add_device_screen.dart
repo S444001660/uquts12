@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // *** [تمت الإضافة] *** استيراد ضروري
 import '../models/device_model.dart';
 import '../models/lab_model.dart';
 import '../services/firebase_database_service.dart';
@@ -12,7 +13,7 @@ import '../utils/ui_helpers.dart';
 import '../utils/validation_utils.dart';
 import '../utils/image_utils.dart';
 import '../utils/device_form_constants.dart';
-import 'package:uquts1/services/permissions_service.dart'; // استيراد خدمة الصلاحيات
+import '../services/permissions_service.dart';
 
 //------------------------------------------------------------------------------
 
@@ -35,6 +36,10 @@ class AddDeviceScreen extends StatefulWidget {
 //------------------------------------------------------------------------------
 
 class _AddDeviceScreenState extends State<AddDeviceScreen> {
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -63,22 +68,17 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   bool _isLoading = false;
   String? _error;
   LabModel? _currentSelectedLabDetails;
-  bool _canDeleteDevice = false; // صلاحية الحذف
+  bool _canDeleteDevice = false;
+
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
+  // ===========================================================================
 
   @override
   void initState() {
     super.initState();
     _checkPermissions();
     _loadInitialData();
-  }
-
-  Future<void> _checkPermissions() async {
-    final canDelete = await PermissionsService.hasPermission('delete_device');
-    if (mounted) {
-      setState(() {
-        _canDeleteDevice = canDelete;
-      });
-    }
   }
 
   @override
@@ -100,153 +100,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     super.dispose();
   }
 
-  Future<void> _loadInitialData() async {
-    setState(() => _isLoading = true);
-    try {
-      final labs = await FirebaseDatabaseService.getLabs();
-      if (!mounted) return;
-
-      setState(() {
-        _availableLabs = labs
-            .where((lab) =>
-                lab.id.isNotEmpty &&
-                lab.labNumber.isNotEmpty &&
-                lab.college.isNotEmpty)
-            .toList();
-      });
-
-      if (widget.device != null) {
-        _loadDeviceData(widget.device!);
-      } else if (widget.scannedBarcodeData != null) {
-        _loadScannedBarcodeData(widget.scannedBarcodeData!);
-      }
-
-      if (widget.labId != null) {
-        await _loadLabDetails(widget.labId!);
-      }
-    } catch (e) {
-      if (mounted) {
-        _error = 'خطأ في تحميل البيانات: $e';
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  void _loadDeviceData(DeviceModel device) {
-    _nameController.text = device.name;
-    _serialNumberController.text = device.serialNumber;
-    _modelController.text = device.model;
-    _processorController.text = device.processor;
-    _storageTypeController.text = device.storageType;
-    _storageSizeController.text = device.storageSize;
-    _osVersionController.text = device.osVersion;
-    _notesController.text = device.notes;
-    _selectedCollege = device.college;
-    _selectedDepartment = device.department;
-    _needsMaintenance = device.needsMaintenance;
-    _hasExtraStorage = device.hasExtraStorage;
-    _universityBarcodeController.text = device.universityBarcode ?? '';
-    _assetSourceController.text = device.assetSource ?? '';
-    _assetCategoryController.text = device.assetCategory ?? '';
-    _assetCodeController.text = device.assetCode ?? '';
-    _extraStorageTypeController.text = device.extraStorageType ?? '';
-    _extraStorageSizeController.text = device.extraStorageSize ?? '';
-    _existingImageUrl = device.imagePath;
-
-    if (_availableLabs.any((lab) => lab.id == device.labId)) {
-      _selectedLab = device.labId;
-      _currentSelectedLabDetails =
-          _availableLabs.firstWhere((lab) => lab.id == device.labId);
-    }
-  }
-
-  void _loadScannedBarcodeData(Map<String, String?> barcodeData) {
-    _universityBarcodeController.text = barcodeData['barcode'] ?? '';
-    _assetCodeController.text = barcodeData['assetCode'] ?? '';
-    _serialNumberController.text = barcodeData['serialNumber'] ?? '';
-    _assetSourceController.text = barcodeData['assetSource'] ?? '';
-    _assetCategoryController.text = barcodeData['assetCategory'] ?? '';
-  }
-
-  Future<void> _loadLabDetails(String labId) async {
-    try {
-      final lab = await FirebaseDatabaseService.getLabById(labId);
-      if (lab != null && mounted) {
-        setState(() {
-          _selectedLab = lab.id;
-          _selectedCollege = lab.college;
-          _selectedDepartment = lab.department;
-          _currentSelectedLabDetails = lab;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        UIHelpers.showSnackBar(
-            context: context,
-            message: 'خطأ في تحميل تفاصيل المعمل: $e',
-            type: SnackBarType.error);
-      }
-    }
-  }
-
-  void _onLabSelected(LabModel? lab) {
-    setState(() {
-      _selectedLab = lab?.id;
-      _selectedCollege = lab?.college;
-      _selectedDepartment = lab?.department;
-      _currentSelectedLabDetails = lab;
-    });
-  }
-
-  Future<void> _pickImage() async {
-    final pickedImage = await ImageUtils.pickImage(
-        context: context, source: ImageSource.camera);
-    if (pickedImage != null) {
-      setState(() {
-        _capturedImage = pickedImage;
-        _existingImageUrl = null;
-      });
-    }
-  }
-
-  Future<void> _validateInputs() async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      throw 'يرجى التحقق من صحة البيانات المدخلة';
-    }
-
-    if (_needsMaintenance &&
-        _capturedImage == null &&
-        _existingImageUrl == null) {
-      throw 'يجب التقاط صورة عند تحديد "يحتاج إلى صيانة".';
-    }
-
-    final serialNumber = _serialNumberController.text.trim();
-    if (!_needsMaintenance && serialNumber.isNotEmpty) {
-      final serialExists = await FirebaseDatabaseService.serialNumberExists(
-        serialNumber,
-        excludeId: widget.device?.id,
-      );
-      if (serialExists) {
-        throw 'الرقم التسلسلي موجود بالفعل لجهاز آخر.';
-      }
-    }
-  }
-
-  Future<String?> _handleImageUpload() async {
-    if (_capturedImage == null) {
-      return _needsMaintenance ? _existingImageUrl : null;
-    }
-
-    final storagePath =
-        'device_images/${widget.device?.id ?? const Uuid().v4()}';
-    return await FirebaseDatabaseService.uploadImageToFirebaseStorage(
-      _capturedImage!,
-      storagePath,
-    );
-  }
+  // ===========================================================================
+  // 3. منطق العمل الرئيسي (Core Business Logic)
+  // ===========================================================================
 
   Future<DeviceModel?> _performSave() async {
     try {
@@ -257,8 +113,18 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       final String? finalImageUrl = await _handleImageUpload();
       final now = DateTime.now();
       final isNewDevice = widget.device == null;
-      final deviceId = widget.device?.id ?? const Uuid().v4();
+      final deviceId =
+          widget.device?.id ?? FirebaseDatabaseService.generateUniqueId();
       final currentUser = FirebaseAuth.instance.currentUser;
+
+      String? currentUserName;
+      if (isNewDevice && currentUser != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        currentUserName = userDoc.data()?['fullName'];
+      }
 
       final deviceToSave = DeviceModel(
         id: deviceId,
@@ -295,6 +161,8 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         updatedAt: now,
         imagePath: finalImageUrl,
         createdBy: isNewDevice ? currentUser?.uid : widget.device?.createdBy,
+        createdByName:
+            isNewDevice ? currentUserName : widget.device?.createdByName,
       );
 
       await FirebaseDatabaseService.addOrUpdateDevice(deviceToSave);
@@ -308,10 +176,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     } catch (e) {
       if (mounted) {
         UIHelpers.showSnackBar(
-          context: context,
-          message: 'خطأ في حفظ الجهاز: $e',
-          type: SnackBarType.error,
-        );
+            context: context,
+            message: 'خطأ في حفظ الجهاز: $e',
+            type: SnackBarType.error);
       }
       return null;
     } finally {
@@ -319,31 +186,6 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  void _resetFormForNextDevice() {
-    _formKey.currentState?.reset();
-    _nameController.clear();
-    _serialNumberController.clear();
-    _notesController.clear();
-    _modelController.clear();
-    _processorController.clear();
-    _storageTypeController.clear();
-    _storageSizeController.clear();
-    _osVersionController.clear();
-    _extraStorageTypeController.clear();
-    _extraStorageSizeController.clear();
-    _universityBarcodeController.clear();
-    _assetSourceController.clear();
-    _assetCategoryController.clear();
-    _assetCodeController.clear();
-
-    setState(() {
-      _needsMaintenance = false;
-      _hasExtraStorage = false;
-      _capturedImage = null;
-      _existingImageUrl = null;
-    });
   }
 
   Future<void> _saveAndPop() async {
@@ -386,7 +228,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
             context: context,
             message: 'تم حذف الجهاز بنجاح',
             type: SnackBarType.success);
-        Navigator.pop(context, true); // إرجاع true للإشارة إلى الحذف
+        Navigator.pop(context, true);
       } catch (e) {
         if (mounted) {
           UIHelpers.showSnackBar(
@@ -400,6 +242,230 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         }
       }
     }
+  }
+
+  // ===========================================================================
+  // 4. دالة بناء واجهة المستخدم (UI Build Method)
+  // ===========================================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isEditing = widget.device != null;
+    final isLabSelected = _selectedLab != null;
+    final shouldShowBarcodeSection = (widget.scannedBarcodeData != null &&
+            !isEditing) ||
+        (isEditing && (widget.device!.universityBarcode?.isNotEmpty == true));
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(isEditing ? 'تعديل جهاز' : 'إضافة جهاز'),
+          actions: [
+            if (isEditing && _canDeleteDevice)
+              IconButton(
+                  onPressed: _deleteDevice,
+                  icon: const Icon(Icons.delete),
+                  tooltip: 'حذف الجهاز'),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? Center(
+                    child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 64, color: theme.colorScheme.error),
+                      const SizedBox(height: 16),
+                      Text('حدث خطأ: $_error',
+                          style: theme.textTheme.titleMedium,
+                          textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                          onPressed: _loadInitialData,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('إعادة المحاولة')),
+                    ],
+                  ))
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Form(
+                      key: _formKey,
+                      child: _buildFormContent(theme, isEditing, isLabSelected,
+                          shouldShowBarcodeSection),
+                    ),
+                  ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 5. الدوال المساعدة والويدجتات الفرعية (Helpers & Sub-Widgets)
+  // ===========================================================================
+
+  Future<void> _loadInitialData() async {
+    setState(() => _isLoading = true);
+    try {
+      final labs = await FirebaseDatabaseService.getLabs();
+      if (!mounted) return;
+      setState(() {
+        _availableLabs = labs
+            .where((lab) =>
+                lab.id.isNotEmpty &&
+                lab.labNumber.isNotEmpty &&
+                lab.college.isNotEmpty)
+            .toList();
+      });
+      if (widget.device != null) {
+        _loadDeviceData(widget.device!);
+      } else if (widget.scannedBarcodeData != null) {
+        _loadScannedBarcodeData(widget.scannedBarcodeData!);
+      }
+      if (widget.labId != null) {
+        await _loadLabDetails(widget.labId!);
+      }
+    } catch (e) {
+      if (mounted) _error = 'خطأ في تحميل البيانات: $e';
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    final canDelete = await PermissionsService.hasPermission('delete_device');
+    if (mounted) setState(() => _canDeleteDevice = canDelete);
+  }
+
+  void _loadDeviceData(DeviceModel device) {
+    _nameController.text = device.name;
+    _serialNumberController.text = device.serialNumber;
+    _modelController.text = device.model;
+    _processorController.text = device.processor;
+    _storageTypeController.text = device.storageType;
+    _storageSizeController.text = device.storageSize;
+    _osVersionController.text = device.osVersion;
+    _notesController.text = device.notes;
+    _selectedCollege = device.college;
+    _selectedDepartment = device.department;
+    _needsMaintenance = device.needsMaintenance;
+    _hasExtraStorage = device.hasExtraStorage;
+    _universityBarcodeController.text = device.universityBarcode ?? '';
+    _assetSourceController.text = device.assetSource ?? '';
+    _assetCategoryController.text = device.assetCategory ?? '';
+    _assetCodeController.text = device.assetCode ?? '';
+    _extraStorageTypeController.text = device.extraStorageType ?? '';
+    _extraStorageSizeController.text = device.extraStorageSize ?? '';
+    _existingImageUrl = device.imagePath;
+    if (_availableLabs.any((lab) => lab.id == device.labId)) {
+      _selectedLab = device.labId;
+      _currentSelectedLabDetails =
+          _availableLabs.firstWhere((lab) => lab.id == device.labId);
+    }
+  }
+
+  void _loadScannedBarcodeData(Map<String, String?> barcodeData) {
+    _universityBarcodeController.text = barcodeData['barcode'] ?? '';
+    _assetCodeController.text = barcodeData['assetCode'] ?? '';
+    _serialNumberController.text = barcodeData['serialNumber'] ?? '';
+    _assetSourceController.text = barcodeData['assetSource'] ?? '';
+    _assetCategoryController.text = barcodeData['assetCategory'] ?? '';
+  }
+
+  Future<void> _loadLabDetails(String labId) async {
+    try {
+      final lab = await FirebaseDatabaseService.getLabById(labId);
+      if (lab != null && mounted) {
+        setState(() {
+          _selectedLab = lab.id;
+          _selectedCollege = lab.college;
+          _selectedDepartment = lab.department;
+          _currentSelectedLabDetails = lab;
+        });
+      }
+    } catch (e) {
+      if (mounted)
+        UIHelpers.showSnackBar(
+            context: context,
+            message: 'خطأ في تحميل تفاصيل المعمل: $e',
+            type: SnackBarType.error);
+    }
+  }
+
+  void _onLabSelected(LabModel? lab) {
+    setState(() {
+      _selectedLab = lab?.id;
+      _selectedCollege = lab?.college;
+      _selectedDepartment = lab?.department;
+      _currentSelectedLabDetails = lab;
+    });
+  }
+
+  Future<void> _pickImage() async {
+    final pickedImage = await ImageUtils.pickImage(
+        context: context, source: ImageSource.camera);
+    if (pickedImage != null) {
+      setState(() {
+        _capturedImage = pickedImage;
+        _existingImageUrl = null;
+      });
+    }
+  }
+
+  Future<void> _validateInputs() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      throw 'يرجى التحقق من صحة البيانات المدخلة';
+    }
+    if (_needsMaintenance &&
+        _capturedImage == null &&
+        _existingImageUrl == null) {
+      throw 'يجب التقاط صورة عند تحديد "يحتاج إلى صيانة".';
+    }
+    final serialNumber = _serialNumberController.text.trim();
+    if (!_needsMaintenance && serialNumber.isNotEmpty) {
+      final serialExists = await FirebaseDatabaseService.serialNumberExists(
+          serialNumber,
+          excludeId: widget.device?.id);
+      if (serialExists) {
+        throw 'الرقم التسلسلي موجود بالفعل لجهاز آخر.';
+      }
+    }
+  }
+
+  Future<String?> _handleImageUpload() async {
+    if (_capturedImage == null) {
+      return _needsMaintenance ? _existingImageUrl : null;
+    }
+    final storagePath =
+        'device_images/${widget.device?.id ?? const Uuid().v4()}';
+    return await FirebaseDatabaseService.uploadImageToFirebaseStorage(
+        _capturedImage!, storagePath);
+  }
+
+  void _resetFormForNextDevice() {
+    _formKey.currentState?.reset();
+    _nameController.clear();
+    _serialNumberController.clear();
+    _notesController.clear();
+    _modelController.clear();
+    _processorController.clear();
+    _storageTypeController.clear();
+    _storageSizeController.clear();
+    _osVersionController.clear();
+    _extraStorageTypeController.clear();
+    _extraStorageSizeController.clear();
+    _universityBarcodeController.clear();
+    _assetSourceController.clear();
+    _assetCategoryController.clear();
+    _assetCodeController.clear();
+    setState(() {
+      _needsMaintenance = false;
+      _hasExtraStorage = false;
+      _capturedImage = null;
+      _existingImageUrl = null;
+    });
   }
 
   Widget _buildDetailRow(
@@ -437,445 +503,339 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     ]);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isEditing = widget.device != null;
-    final isLabSelected = _selectedLab != null;
-    final shouldShowBarcodeSection = (widget.scannedBarcodeData != null &&
-            !isEditing) ||
-        (isEditing && (widget.device!.universityBarcode?.isNotEmpty == true));
-
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(isEditing ? 'تعديل جهاز' : 'إضافة جهاز'),
-          actions: [
-            if (isEditing &&
-                _canDeleteDevice) // عرض زر الحذف فقط إذا كان مسموحًا
-              IconButton(
-                  onPressed: _deleteDevice,
-                  icon: const Icon(Icons.delete),
-                  tooltip: 'حذف الجهاز'),
-          ],
+  /// *** [تم الإكمال] *** ويدجت يحتوي على جميع حقول الفورم.
+  Widget _buildFormContent(ThemeData theme, bool isEditing, bool isLabSelected,
+      bool shouldShowBarcodeSection) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<LabModel>(
+          decoration: InputDecoration(
+              labelText: 'اختيار المعمل',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          value: _currentSelectedLabDetails,
+          items: _availableLabs
+              .map((lab) => DropdownMenuItem<LabModel>(
+                  value: lab, child: Text('${lab.labNumber} - ${lab.college}')))
+              .toList(),
+          onChanged: _onLabSelected,
+          validator: (value) => ValidationUtils.validateDropdown(value?.id,
+              errorMessage: 'الرجاء اختيار المعمل'),
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Center(
-                    child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                        Icon(Icons.error_outline,
-                            size: 64, color: theme.colorScheme.error),
-                        const SizedBox(height: 16),
-                        Text('حدث خطأ: $_error',
-                            style: theme.textTheme.titleMedium,
-                            textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                            onPressed: _loadInitialData,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('إعادة المحاولة')),
-                      ]))
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            DropdownButtonFormField<LabModel>(
-                              decoration: InputDecoration(
-                                labelText: 'اختيار المعمل',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ),
-                              value: _currentSelectedLabDetails,
-                              items: _availableLabs
-                                  .map((lab) => DropdownMenuItem<LabModel>(
-                                      value: lab,
-                                      child: Text(
-                                          '${lab.labNumber} - ${lab.college}')))
-                                  .toList(),
-                              onChanged: _onLabSelected,
-                              validator: (value) =>
-                                  ValidationUtils.validateDropdown(value?.id,
-                                      errorMessage: 'الرجاء اختيار المعمل'),
-                            ),
-                            const SizedBox(height: 16),
-                            if (isLabSelected) ...[
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: Card(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text('تفاصيل المعمل',
-                                            style: theme.textTheme.titleMedium
-                                                ?.copyWith(
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                        const SizedBox(height: 8),
-                                        if (_currentSelectedLabDetails != null)
-                                          _buildLabDetailsCard(
-                                              _currentSelectedLabDetails!),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (shouldShowBarcodeSection)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 16.0),
-                                  child: Row(children: [
-                                    Text('بيانات الباركود',
-                                        style: theme.textTheme.titleMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.bold)),
-                                    const SizedBox(width: 8),
-                                    const Icon(Icons.check_circle,
-                                        color: Colors.green, size: 20),
-                                  ]),
-                                ),
-                              SwitchListTile(
-                                title: const Text('يحتاج إلى صيانة'),
-                                subtitle: Text(
-                                    _needsMaintenance
-                                        ? 'الجهاز في حالة صيانة'
-                                        : 'الجهاز يعمل بشكل طبيعي',
-                                    style: TextStyle(
-                                        color: _needsMaintenance
-                                            ? Colors.orange
-                                            : Colors.green)),
-                                value: _needsMaintenance,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _needsMaintenance = value;
-                                  });
-                                  WidgetsBinding.instance
-                                      .addPostFrameCallback((_) {
-                                    _formKey.currentState?.validate();
-                                  });
-                                },
-                                activeColor: Colors.orange,
-                              ),
-                              const SizedBox(height: 16),
-                              if (_needsMaintenance) ...[
-                                ElevatedButton.icon(
-                                  onPressed: _pickImage,
-                                  icon: const Icon(Icons.camera_alt),
-                                  label: Text(_capturedImage == null &&
-                                          _existingImageUrl == null
-                                      ? 'التقاط صورة الصيانة'
-                                      : 'تغيير الصورة'),
-                                ),
-                                const SizedBox(height: 12),
-                                if (_capturedImage != null ||
-                                    _existingImageUrl != null)
-                                  Stack(children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: _capturedImage != null
-                                          ? Image.file(_capturedImage!,
-                                              height: 200,
-                                              width: double.infinity,
-                                              fit: BoxFit.cover)
-                                          : Image.network(_existingImageUrl!,
-                                              height: 200,
-                                              width: double.infinity,
-                                              fit: BoxFit.cover, loadingBuilder:
-                                                  (context, child,
-                                                      loadingProgress) {
-                                              if (loadingProgress == null) {
-                                                return child;
-                                              }
-                                              return const Center(
-                                                  child:
-                                                      CircularProgressIndicator());
-                                            }, errorBuilder:
-                                                  (context, error, stackTrace) {
-                                              return const Center(
-                                                  child: Icon(
-                                                      Icons.broken_image,
-                                                      size: 50));
-                                            }),
-                                    ),
-                                    Positioned(
-                                      bottom: 8,
-                                      right: 8,
-                                      child: CircleAvatar(
-                                        backgroundColor: Colors.black54,
-                                        child: IconButton(
-                                          icon: const Icon(Icons.zoom_out_map,
-                                              color: Colors.white),
-                                          onPressed: () {
-                                            if (_capturedImage != null) {
-                                              UIHelpers.showImageDialog(
-                                                  context: context,
-                                                  imageFile: _capturedImage!);
-                                            } else if (_existingImageUrl !=
-                                                null) {
-                                              UIHelpers.showImageDialog(
-                                                  context: context,
-                                                  imageUrl: _existingImageUrl!);
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ]),
-                                const SizedBox(height: 16),
-                              ],
-                              DropdownButtonFormField<String>(
-                                decoration: InputDecoration(
-                                  labelText: 'المعالج',
-                                  border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                                value: _processorController.text.isNotEmpty
-                                    ? _processorController.text
-                                    : null,
-                                items: DeviceFormConstants.processors
-                                    .map((item) => DropdownMenuItem(
-                                        value: item, child: Text(item)))
-                                    .toList(),
-                                onChanged: (value) =>
-                                    _processorController.text = value ?? '',
-                                validator: (value) {
-                                  if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateDropdown(value,
-                                      errorMessage: 'المعالج مطلوب');
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              DropdownButtonFormField<String>(
-                                decoration: InputDecoration(
-                                    labelText: 'الموديل',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
-                                value: _modelController.text.isNotEmpty
-                                    ? _modelController.text
-                                    : null,
-                                items: DeviceFormConstants.models
-                                    .map((model) => DropdownMenuItem(
-                                        value: model, child: Text(model)))
-                                    .toList(),
-                                onChanged: (value) =>
-                                    _modelController.text = value ?? '',
-                                validator: (value) {
-                                  if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateDropdown(value,
-                                      errorMessage: 'الرجاء اختيار الموديل');
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _serialNumberController,
-                                decoration: InputDecoration(
-                                    labelText: 'الرقم التسلسلي',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
-                                validator: (value) {
-                                  if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateSerialNumber(
-                                      value);
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              DropdownButtonFormField<String>(
-                                decoration: InputDecoration(
-                                  labelText: 'نوع التخزين',
-                                  border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                                value: _storageTypeController.text.isNotEmpty
-                                    ? _storageTypeController.text
-                                    : null,
-                                items: DeviceFormConstants.storageTypes
-                                    .map((item) => DropdownMenuItem(
-                                        value: item, child: Text(item)))
-                                    .toList(),
-                                onChanged: (value) =>
-                                    _storageTypeController.text = value ?? '',
-                                validator: (value) {
-                                  if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateDropdown(value,
-                                      errorMessage: 'نوع التخزين مطلوب');
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              DropdownButtonFormField<String>(
-                                decoration: InputDecoration(
-                                  labelText: 'حجم التخزين',
-                                  border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                                value: _storageSizeController.text.isNotEmpty
-                                    ? _storageSizeController.text
-                                    : null,
-                                items: DeviceFormConstants.storageSizes
-                                    .map((item) => DropdownMenuItem(
-                                        value: item, child: Text(item)))
-                                    .toList(),
-                                onChanged: (value) =>
-                                    _storageSizeController.text = value ?? '',
-                                validator: (value) {
-                                  if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateDropdown(value,
-                                      errorMessage: 'حجم التخزين مطلوب');
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              DropdownButtonFormField<String>(
-                                decoration: InputDecoration(
-                                  labelText: 'نظام التشغيل',
-                                  border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                                value: _osVersionController.text.isNotEmpty
-                                    ? _osVersionController.text
-                                    : null,
-                                items: DeviceFormConstants.osVersions
-                                    .map((item) => DropdownMenuItem(
-                                        value: item, child: Text(item)))
-                                    .toList(),
-                                onChanged: (value) =>
-                                    _osVersionController.text = value ?? '',
-                                validator: (value) {
-                                  if (_needsMaintenance) return null;
-                                  return ValidationUtils.validateDropdown(value,
-                                      errorMessage: 'نظام التشغيل مطلوب');
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              SwitchListTile(
-                                title: const Text('يوجد تخزين إضافي'),
-                                value: _hasExtraStorage,
-                                onChanged: (value) {
-                                  setState(() => _hasExtraStorage = value);
-                                },
-                              ),
-                              if (_hasExtraStorage) ...[
-                                const SizedBox(height: 16),
-                                DropdownButtonFormField<String>(
-                                  decoration: InputDecoration(
-                                    labelText: 'نوع التخزين الإضافي',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12)),
-                                  ),
-                                  value: _extraStorageTypeController
-                                          .text.isNotEmpty
-                                      ? _extraStorageTypeController.text
-                                      : null,
-                                  items: DeviceFormConstants.storageTypes
-                                      .map((item) => DropdownMenuItem(
-                                          value: item, child: Text(item)))
-                                      .toList(),
-                                  onChanged: (value) =>
-                                      _extraStorageTypeController.text =
-                                          value ?? '',
-                                  validator: (value) {
-                                    if (_needsMaintenance || !_hasExtraStorage)
-                                      return null;
-                                    return ValidationUtils.validateDropdown(
-                                        value,
-                                        errorMessage:
-                                            'نوع التخزين الإضافي مطلوب');
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                                DropdownButtonFormField<String>(
-                                  decoration: InputDecoration(
-                                    labelText: 'حجم التخزين الإضافي',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12)),
-                                  ),
-                                  value: _extraStorageSizeController
-                                          .text.isNotEmpty
-                                      ? _extraStorageSizeController.text
-                                      : null,
-                                  items: DeviceFormConstants.storageSizes
-                                      .map((item) => DropdownMenuItem(
-                                          value: item, child: Text(item)))
-                                      .toList(),
-                                  onChanged: (value) =>
-                                      _extraStorageSizeController.text =
-                                          value ?? '',
-                                  validator: (value) {
-                                    if (_needsMaintenance || !_hasExtraStorage)
-                                      return null;
-                                    return ValidationUtils.validateDropdown(
-                                        value,
-                                        errorMessage:
-                                            'حجم التخزين الإضافي مطلوب');
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                              ],
-                              TextFormField(
-                                controller: _notesController,
-                                decoration: InputDecoration(
-                                    labelText: 'ملاحظات',
-                                    border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
-                                minLines: 3,
-                                maxLines: 5,
-                                validator: (value) {
-                                  if (_needsMaintenance) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return 'حقل الملاحظات إجباري في حالة الصيانة.';
-                                    }
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 24),
-                              if (isEditing)
-                                FilledButton.icon(
-                                  onPressed: _isLoading ? null : _saveAndPop,
-                                  icon: const Icon(Icons.save),
-                                  label: const Text('حفظ التعديلات'),
-                                )
-                              else
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: FilledButton.icon(
-                                        onPressed:
-                                            _isLoading ? null : _saveAndPop,
-                                        icon: const Icon(Icons.save),
-                                        label: const Text('حفظ وخروج'),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: FilledButton.tonalIcon(
-                                        onPressed: _isLoading
-                                            ? null
-                                            : _saveAndAddAnother,
-                                        icon: const Icon(Icons.add),
-                                        label: const Text('حفظ وإضافة آخر'),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                            ]
-                          ]),
-                    ),
+        const SizedBox(height: 16),
+        if (isLabSelected) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Card(
+              color: theme.colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('تفاصيل المعمل',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    if (_currentSelectedLabDetails != null)
+                      _buildLabDetailsCard(_currentSelectedLabDetails!),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (shouldShowBarcodeSection)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Row(children: [
+              Text('بيانات الباركود',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              const Icon(Icons.check_circle, color: Colors.green, size: 20),
+            ]),
+          ),
+        SwitchListTile(
+          title: const Text('يحتاج إلى صيانة'),
+          subtitle: Text(
+            _needsMaintenance
+                ? 'الجهاز في حالة صيانة'
+                : 'الجهاز يعمل بشكل طبيعي',
+            style: TextStyle(
+                color: _needsMaintenance ? Colors.orange : Colors.green),
+          ),
+          value: _needsMaintenance,
+          onChanged: (value) {
+            setState(() => _needsMaintenance = value);
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => _formKey.currentState?.validate());
+          },
+          activeColor: Colors.orange,
+        ),
+        const SizedBox(height: 16),
+        if (_needsMaintenance) ...[
+          ElevatedButton.icon(
+            onPressed: _pickImage,
+            icon: const Icon(Icons.camera_alt),
+            label: Text(_capturedImage == null && _existingImageUrl == null
+                ? 'التقاط صورة الصيانة'
+                : 'تغيير الصورة'),
+          ),
+          const SizedBox(height: 12),
+          if (_capturedImage != null || _existingImageUrl != null)
+            Stack(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _capturedImage != null
+                    ? Image.file(_capturedImage!,
+                        height: 200, width: double.infinity, fit: BoxFit.cover)
+                    : Image.network(_existingImageUrl!,
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) =>
+                            loadingProgress == null
+                                ? child
+                                : const Center(
+                                    child: CircularProgressIndicator()),
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Center(
+                                child: Icon(Icons.broken_image, size: 50))),
+              ),
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: CircleAvatar(
+                  backgroundColor: Colors.black54,
+                  child: IconButton(
+                    icon: const Icon(Icons.zoom_out_map, color: Colors.white),
+                    onPressed: () {
+                      if (_capturedImage != null) {
+                        UIHelpers.showImageDialog(
+                            context: context, imageFile: _capturedImage!);
+                      } else if (_existingImageUrl != null) {
+                        UIHelpers.showImageDialog(
+                            context: context, imageUrl: _existingImageUrl!);
+                      }
+                    },
                   ),
-      ),
+                ),
+              ),
+            ]),
+          const SizedBox(height: 16),
+        ],
+        TextFormField(
+          controller: _nameController,
+          decoration: InputDecoration(
+              labelText: 'اسم الجهاز',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateName(value);
+          },
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _serialNumberController,
+          decoration: InputDecoration(
+              labelText: 'الرقم التسلسلي',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateSerialNumber(value);
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+              labelText: 'الموديل',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          value:
+              _modelController.text.isNotEmpty ? _modelController.text : null,
+          items: DeviceFormConstants.models
+              .map(
+                  (model) => DropdownMenuItem(value: model, child: Text(model)))
+              .toList(),
+          onChanged: (value) => _modelController.text = value ?? '',
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateDropdown(value,
+                errorMessage: 'الرجاء اختيار الموديل');
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+              labelText: 'المعالج',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          value: _processorController.text.isNotEmpty
+              ? _processorController.text
+              : null,
+          items: DeviceFormConstants.processors
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: (value) => _processorController.text = value ?? '',
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateDropdown(value,
+                errorMessage: 'المعالج مطلوب');
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+              labelText: 'نوع التخزين',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          value: _storageTypeController.text.isNotEmpty
+              ? _storageTypeController.text
+              : null,
+          items: DeviceFormConstants.storageTypes
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: (value) => _storageTypeController.text = value ?? '',
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateDropdown(value,
+                errorMessage: 'نوع التخزين مطلوب');
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+              labelText: 'حجم التخزين',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          value: _storageSizeController.text.isNotEmpty
+              ? _storageSizeController.text
+              : null,
+          items: DeviceFormConstants.storageSizes
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: (value) => _storageSizeController.text = value ?? '',
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateDropdown(value,
+                errorMessage: 'حجم التخزين مطلوب');
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+              labelText: 'نظام التشغيل',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          value: _osVersionController.text.isNotEmpty
+              ? _osVersionController.text
+              : null,
+          items: DeviceFormConstants.osVersions
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: (value) => _osVersionController.text = value ?? '',
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateDropdown(value,
+                errorMessage: 'نظام التشغيل مطلوب');
+          },
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('يوجد تخزين إضافي'),
+          value: _hasExtraStorage,
+          onChanged: (value) => setState(() => _hasExtraStorage = value),
+        ),
+        if (_hasExtraStorage) ...[
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+                labelText: 'نوع التخزين الإضافي',
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12))),
+            value: _extraStorageTypeController.text.isNotEmpty
+                ? _extraStorageTypeController.text
+                : null,
+            items: DeviceFormConstants.storageTypes
+                .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                .toList(),
+            onChanged: (value) =>
+                _extraStorageTypeController.text = value ?? '',
+            validator: (value) {
+              if (_needsMaintenance || !_hasExtraStorage) return null;
+              return ValidationUtils.validateDropdown(value,
+                  errorMessage: 'نوع التخزين الإضافي مطلوب');
+            },
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+                labelText: 'حجم التخزين الإضافي',
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12))),
+            value: _extraStorageSizeController.text.isNotEmpty
+                ? _extraStorageSizeController.text
+                : null,
+            items: DeviceFormConstants.storageSizes
+                .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                .toList(),
+            onChanged: (value) =>
+                _extraStorageSizeController.text = value ?? '',
+            validator: (value) {
+              if (_needsMaintenance || !_hasExtraStorage) return null;
+              return ValidationUtils.validateDropdown(value,
+                  errorMessage: 'حجم التخزين الإضافي مطلوب');
+            },
+          ),
+        ],
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _notesController,
+          decoration: InputDecoration(
+              labelText: 'ملاحظات',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          minLines: 3,
+          maxLines: 5,
+          validator: (value) {
+            if (_needsMaintenance && (value == null || value.trim().isEmpty)) {
+              return 'حقل الملاحظات إجباري في حالة الصيانة.';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 24),
+        if (isEditing)
+          FilledButton.icon(
+            onPressed: _isLoading ? null : _saveAndPop,
+            icon: const Icon(Icons.save),
+            label: const Text('حفظ التعديلات'),
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _isLoading ? null : _saveAndPop,
+                  icon: const Icon(Icons.save),
+                  label: const Text('حفظ وخروج'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: _isLoading ? null : _saveAndAddAnother,
+                  icon: const Icon(Icons.add),
+                  label: const Text('حفظ وإضافة آخر'),
+                ),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/device_model.dart'; // نموذج بيانات الجهاز.
-import 'package:uquts1/services/firebase_database_service.dart';
-import '../utils/device_form_constants.dart'; // ثوابت وقوائم مستخدمة في الفورم.
-import '../utils/ui_helpers.dart'; // دوال مساعدة لعرض عناصر واجهة المستخدم.
-import 'add_device_screen.dart'; // شاشة إضافة/تعديل جهاز.
-import 'view_device_screen.dart'; // الشاشة الجديدة لعرض الجهاز فقط.
+import '../models/device_model.dart';
+import '../services/firebase_database_service.dart';
+import '../utils/device_form_constants.dart';
+import '../utils/ui_helpers.dart';
+import 'add_device_screen.dart';
+import 'view_device_screen.dart';
 
 //------------------------------------------------------------------------------
 
-/// ويدجت شاشة قائمة الأجهزة، وهي StatefulWidget لإدارة الحالات الداخلية مثل البحث والتصفية.
 class DevicesListScreen extends StatefulWidget {
   const DevicesListScreen({super.key});
 
@@ -18,171 +17,44 @@ class DevicesListScreen extends StatefulWidget {
 
 //------------------------------------------------------------------------------
 
-/// كلاس الحالة (State) الخاص بـ DevicesListScreen.
 class _DevicesListScreenState extends State<DevicesListScreen> {
-  // --- ثوابت لتنظيم الكود وتوحيد التصميم ---
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   static const double _defaultPadding = 16.0;
   static const double _iconSize = 64.0;
 
-  //------------------------------------------------------------------------------
-
-  // --- متغيرات الحالة (State Variables) ---
-  /// لتخزين القائمة الكاملة للأجهزة من قاعدة البيانات.
   List<DeviceModel> _allDevices = [];
-
-  /// لتخزين القائمة المصفاة التي يتم عرضها للمستخدم بعد تطبيق البحث والفلاتر.
   List<DeviceModel> _filteredDevices = [];
-
-  /// لتتبع حالة التحميل وعرض مؤشر التحميل.
   bool _isLoading = true;
 
-  //------------------------------------------------------------------------------
-
-  // --- متحكمات البحث والتصفية ---
-  /// متحكم حقل البحث النصي.
   final TextEditingController _searchController = TextEditingController();
-
-  /// متغيرات لتخزين قيم الفلاتر المختارة حاليًا.
   String? _selectedCollege;
   String? _selectedDepartment;
-  bool?
-      _selectedNeedsMaintenance; // null: الكل, true: يحتاج صيانة, false: لا يحتاج صيانة
+  bool? _selectedNeedsMaintenance;
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
+  // ===========================================================================
 
-  /// دالة initState: يتم استدعاؤها مرة واحدة عند إنشاء الويدجت.
   @override
   void initState() {
     super.initState();
-    _loadDevices(); // تحميل قائمة الأجهزة عند بدء الشاشة.
-    // إضافة مستمع لحقل البحث لتحديث القائمة تلقائيًا عند كل تغيير في النص.
+    _loadDevices();
     _searchController.addListener(_filterDevices);
   }
 
-  //------------------------------------------------------------------------------
-
-  /// دالة dispose: يتم استدعاؤها عند إزالة الويدجت لتحرير الموارد.
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
+  // ===========================================================================
 
-  /// دالة غير متزامنة لتحميل القائمة الكاملة للأجهزة من قاعدة البيانات.
-  Future<void> _loadDevices() async {
-    try {
-      setState(() => _isLoading = true);
-      final devices = await FirebaseDatabaseService.getDevices();
-      setState(() {
-        _allDevices = devices;
-        _isLoading = false;
-      });
-      _filterDevices(); // تطبيق الفلاتر المبدئية بعد تحميل البيانات.
-    } catch (e) {
-      _handleLoadError(e); // معالجة أي خطأ يحدث أثناء التحميل.
-    }
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة مخصصة لمعالجة الأخطاء التي قد تحدث أثناء تحميل البيانات.
-  void _handleLoadError(dynamic error) {
-    setState(() => _isLoading = false);
-    UIHelpers.showSnackBar(
-        context: context,
-        message: 'خطأ في تحميل الأجهزة: $error',
-        type: SnackBarType.error);
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة التصفية المحورية التي يتم استدعاؤها عند أي تغيير في البحث أو الفلاتر.
-  void _filterDevices() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredDevices = _allDevices.where((device) {
-        // شرط البحث النصي: يطابق اسم الجهاز، الموديل، الرقم التسلسلي، الكلية، أو القسم.
-        final matchesSearch = device.name.toLowerCase().contains(query) ||
-            device.model.toLowerCase().contains(query) ||
-            device.serialNumber.toLowerCase().contains(query) ||
-            device.college.toLowerCase().contains(query) ||
-            device.department.toLowerCase().contains(query);
-
-        // شرط فلتر الكلية: إذا لم يتم تحديد كلية، يتم قبول جميع الأجهزة.
-        final matchesCollege =
-            _selectedCollege == null || device.college == _selectedCollege;
-        // شرط فلتر القسم.
-        final matchesDepartment = _selectedDepartment == null ||
-            device.department == _selectedDepartment;
-        // شرط فلتر حالة الصيانة: إذا لم يتم تحديد حالة، يتم قبول جميع الأجهزة.
-        final matchesMaintenance = _selectedNeedsMaintenance == null ||
-            device.needsMaintenance == _selectedNeedsMaintenance;
-
-        // إرجاع الأجهزة التي تحقق جميع الشروط المطبقة.
-        return matchesSearch &&
-            matchesCollege &&
-            matchesDepartment &&
-            matchesMaintenance;
-      }).toList();
-    });
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة لعرض ورقة سفلية (Bottom Sheet) تحتوي على خيارات التصفية.
-  void _showFilterBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, // للسماح للورقة بأخذ ارتفاع متغير.
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        // استخدام DraggableScrollableSheet يسمح للمستخدم بسحب الورقة لتغيير ارتفاعها.
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6, // الارتفاع الأولي.
-          minChildSize: 0.3, // أصغر ارتفاع.
-          maxChildSize: 0.9, // أكبر ارتفاع.
-          expand: false, // مهم لكي لا تتجاوز حدود الشاشة.
-          builder: (context, scrollController) {
-            return DeviceFilterBottomSheet(
-              scrollController: scrollController,
-              initialSelectedCollege: _selectedCollege,
-              initialSelectedDepartment: _selectedDepartment,
-              initialSelectedNeedsMaintenance: _selectedNeedsMaintenance,
-              onApplyFilters: (college, department, needsMaintenance) {
-                // عند تطبيق الفلاتر، يتم تحديث متغيرات الحالة واستدعاء دالة التصفية.
-                setState(() {
-                  _selectedCollege = college;
-                  _selectedDepartment = department;
-                  _selectedNeedsMaintenance = needsMaintenance;
-                });
-                _filterDevices(); // تطبيق الفلاتر الجديدة.
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة للانتقال إلى شاشة عرض الجهاز وتحديث القائمة عند العودة.
-  void _navigateToDeviceView(DeviceModel device) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (context) => ViewDeviceScreen(
-              device: device)), // <--- الانتقال إلى شاشة العرض الجديدة.
-    ).then((_) => _loadDevices()); // تحديث القائمة بالكامل بعد العودة.
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة بناء الواجهة الرئيسية للشاشة.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -207,17 +79,119 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
       ),
       body: Column(
         children: [
-          _buildSearchBar(theme), // بناء حقل البحث.
-          // جعل قائمة الأجهزة تمتد لملء المساحة المتبقية.
+          _buildSearchBar(theme),
           Expanded(child: _buildDevicesList(theme)),
         ],
       ),
     );
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي (Core Business Logic)
+  // ===========================================================================
 
-  /// ويدجت مساعد لبناء حقل البحث.
+  /// *** [تم التحديث] *** دالة لتحميل الأجهزة وفرزها حسب الأحدث.
+  Future<void> _loadDevices() async {
+    try {
+      setState(() => _isLoading = true);
+      final devices = await FirebaseDatabaseService.getDevices();
+      if (!mounted) return;
+
+      // --- [إضافة جديدة] --- فرز القائمة حسب تاريخ الإنشاء (الأحدث أولاً)
+      devices.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      setState(() {
+        _allDevices = devices;
+        _isLoading = false;
+      });
+      _filterDevices(); // تطبيق الفلاتر المبدئية بعد تحميل البيانات.
+    } catch (e) {
+      _handleLoadError(e); // معالجة أي خطأ يحدث أثناء التحميل.
+    }
+  }
+
+  /// دالة التصفية المحورية التي يتم استدعاؤها عند أي تغيير في البحث أو الفلاتر.
+  void _filterDevices() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredDevices = _allDevices.where((device) {
+        final matchesSearch = device.name.toLowerCase().contains(query) ||
+            device.model.toLowerCase().contains(query) ||
+            device.serialNumber.toLowerCase().contains(query) ||
+            device.college.toLowerCase().contains(query) ||
+            device.department.toLowerCase().contains(query);
+
+        final matchesCollege =
+            _selectedCollege == null || device.college == _selectedCollege;
+        final matchesDepartment = _selectedDepartment == null ||
+            device.department == _selectedDepartment;
+        final matchesMaintenance = _selectedNeedsMaintenance == null ||
+            device.needsMaintenance == _selectedNeedsMaintenance;
+
+        return matchesSearch &&
+            matchesCollege &&
+            matchesDepartment &&
+            matchesMaintenance;
+      }).toList();
+    });
+  }
+
+  /// دالة لعرض ورقة سفلية (Bottom Sheet) تحتوي على خيارات التصفية.
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return DeviceFilterBottomSheet(
+              scrollController: scrollController,
+              initialSelectedCollege: _selectedCollege,
+              initialSelectedDepartment: _selectedDepartment,
+              initialSelectedNeedsMaintenance: _selectedNeedsMaintenance,
+              onApplyFilters: (college, department, needsMaintenance) {
+                setState(() {
+                  _selectedCollege = college;
+                  _selectedDepartment = department;
+                  _selectedNeedsMaintenance = needsMaintenance;
+                });
+                _filterDevices();
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// دالة للانتقال إلى شاشة عرض الجهاز وتحديث القائمة عند العودة.
+  void _navigateToDeviceView(DeviceModel device) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ViewDeviceScreen(device: device)),
+    ).then((_) => _loadDevices());
+  }
+
+  // ===========================================================================
+  // 5. الدوال المساعدة والويدجتات الفرعية (Helpers & Sub-Widgets)
+  // ===========================================================================
+
+  void _handleLoadError(dynamic error) {
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    UIHelpers.showSnackBar(
+        context: context,
+        message: 'خطأ في تحميل الأجهزة: $error',
+        type: SnackBarType.error);
+  }
+
   Widget _buildSearchBar(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.all(_defaultPadding),
@@ -231,7 +205,6 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
                   icon: const Icon(Icons.clear),
                   onPressed: () {
                     _searchController.clear();
-                    // _filterDevices() سيتم استدعاؤها تلقائيًا بواسطة المستمع.
                   },
                 )
               : null,
@@ -241,18 +214,13 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء قائمة الأجهزة، ويعمل كـ "آلة حالة" للواجهة.
   Widget _buildDevicesList(ThemeData theme) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_filteredDevices.isEmpty) {
-      // إذا كانت القائمة المصفاة فارغة، يتم عرض واجهة توضيحية.
       return _buildEmptyView(theme);
     }
-    // إذا كانت هناك بيانات، يتم عرض القائمة.
     return ListView.builder(
       padding: const EdgeInsets.all(_defaultPadding),
       itemCount: _filteredDevices.length,
@@ -261,9 +229,6 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء واجهة المستخدم في حالة عدم وجود أجهزة تطابق البحث.
   Widget _buildEmptyView(ThemeData theme) {
     return Center(
       child: Column(
@@ -284,9 +249,6 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء عنصر واحد (بطاقة) في قائمة الأجهزة.
   Widget _buildDeviceItem(ThemeData theme, DeviceModel device) {
     return Card(
       margin: const EdgeInsets.only(bottom: _defaultPadding),
@@ -315,17 +277,16 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
           device.needsMaintenance ? Icons.build_circle : Icons.check_circle,
           color: device.needsMaintenance ? Colors.orange : Colors.green,
         ),
-        onTap: () =>
-            _navigateToDeviceView(device), // <--- ينقل لـ ViewDeviceScreen
+        onTap: () => _navigateToDeviceView(device),
       ),
     );
   }
 }
 
 //------------------------------------------------------------------------------
+// ويدجت منفصل للـ Bottom Sheet
+//------------------------------------------------------------------------------
 
-/// ويدجت Bottom Sheet المخصصة لفلاتر الأجهزة.
-/// تم فصلها في ويدجت خاص بها لتنظيم الكود وإدارة حالتها المؤقتة بشكل مستقل.
 class DeviceFilterBottomSheet extends StatefulWidget {
   final ScrollController scrollController;
   final String? initialSelectedCollege;
@@ -347,16 +308,11 @@ class DeviceFilterBottomSheet extends StatefulWidget {
       _DeviceFilterBottomSheetState();
 }
 
-//------------------------------------------------------------------------------
-
-/// كلاس الحالة الخاص بـ DeviceFilterBottomSheet.
 class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
-  // متغيرات حالة مؤقتة لتخزين اختيارات المستخدم داخل الـ Bottom Sheet.
   String? _tempSelectedCollege;
   String? _tempSelectedDepartment;
   bool? _tempSelectedNeedsMaintenance;
 
-  /// تهيئة الحالة المؤقتة بالقيم الحالية للفلاتر عند فتح الـ Bottom Sheet.
   @override
   void initState() {
     super.initState();
@@ -365,12 +321,9 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
     _tempSelectedNeedsMaintenance = widget.initialSelectedNeedsMaintenance;
   }
 
-  /// دالة بناء واجهة المستخدم الخاصة بالـ Bottom Sheet.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // تجهيز قوائم الفلاتر مع إضافة خيار "الكل" (الذي يمثله 'null').
     final List<String?> colleges = [null, ...DeviceFormConstants.colleges];
     final List<String?> departments = [null];
     if (_tempSelectedCollege != null) {
@@ -398,13 +351,10 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-
-              // قائمة قابلة للتمرير تحتوي على جميع خيارات الفلاتر.
               Expanded(
                 child: ListView(
                   controller: widget.scrollController,
                   children: [
-                    // فلتر الكلية
                     _buildFilterSection(
                       title: 'الكلية',
                       children: colleges.map((college) {
@@ -415,16 +365,13 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
                           onChanged: (value) {
                             setState(() {
                               _tempSelectedCollege = value;
-                              _tempSelectedDepartment =
-                                  null; // إعادة تعيين القسم عند تغيير الكلية
+                              _tempSelectedDepartment = null;
                             });
                           },
                         );
                       }).toList(),
                     ),
                     const SizedBox(height: 10),
-
-                    // فلتر القسم (يظهر فقط عند اختيار كلية).
                     if (_tempSelectedCollege != null)
                       _buildFilterSection(
                         title: 'القسم',
@@ -442,8 +389,6 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
                         }).toList(),
                       ),
                     const SizedBox(height: 10),
-
-                    // فلتر حالة الصيانة.
                     _buildFilterSection(
                       title: 'حالة الصيانة',
                       children: [
@@ -483,8 +428,6 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // أزرار التحكم في الفلاتر (تطبيق أو مسح).
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -511,8 +454,7 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
                   Expanded(
                     child: FilledButton(
                       onPressed: () {
-                        Navigator.pop(context); // إغلاق الورقة السفلية.
-                        // استدعاء الدالة الممررة من الشاشة الرئيسية لتطبيق الفلاتر.
+                        Navigator.pop(context);
                         widget.onApplyFilters(
                           _tempSelectedCollege,
                           _tempSelectedDepartment,
@@ -529,7 +471,7 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10), // هامش سفلي.
+              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -537,9 +479,6 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// دالة مساعدة لبناء قسم فلتر واحد (عنوان ومجموعة خيارات).
   Widget _buildFilterSection(
       {required String title, required List<Widget> children}) {
     return Column(
@@ -554,7 +493,7 @@ class _DeviceFilterBottomSheetState extends State<DeviceFilterBottomSheet> {
         ),
         const SizedBox(height: 8),
         ...children,
-        const Divider(), // فاصل بين الأقسام.
+        const Divider(),
       ],
     );
   }

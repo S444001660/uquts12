@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 // استيراد الموديلات مع إعطاء اسم مميز للثاني لتجنب التضارب
 import '../models/task_model.dart';
-import '../models/user_task_model.dart' as user_task_model; // <--- الحل هنا
+import '../models/user_task_model.dart' as user_task_model;
 import 'task_details_screen.dart';
 
 class UserTasksScreen extends StatefulWidget {
@@ -15,6 +15,10 @@ class UserTasksScreen extends StatefulWidget {
 }
 
 class _UserTasksScreenState extends State<UserTasksScreen> {
+  // ===========================================================================
+  // 1. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
+
   @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -24,7 +28,8 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
         title: const Text('مهامي'),
       ),
       body: userId == null
-          ? const Center(child: Text('المستخدم غير مسجل دخوله. يرجى إعادة تسجيل الدخول.'))
+          ? const Center(
+              child: Text('المستخدم غير مسجل دخوله. يرجى إعادة تسجيل الدخول.'))
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('user_tasks')
@@ -48,9 +53,9 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
                   itemBuilder: (context, index) {
                     final userTaskDoc = snapshot.data!.docs[index];
                     // استخدام الاسم المميز للوصول إلى الموديل الصحيح
-                    final userTask = user_task_model.UserTaskModel.fromMap( // <--- الحل هنا
+                    final userTask = user_task_model.UserTaskModel.fromMap(
                         userTaskDoc.data() as Map<String, dynamic>);
-                    
+
                     return _buildTaskCard(userTask);
                   },
                 );
@@ -59,8 +64,12 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
     );
   }
 
-  // استخدام الاسم المميز في نوع المتغير
-  Widget _buildTaskCard(user_task_model.UserTaskModel userTask) { // <--- الحل هنا
+  // ===========================================================================
+  // 2. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets) - (يمكن فصلها)
+  // ===========================================================================
+
+  /// ويدجت مساعد لبناء بطاقة مهمة واحدة في القائمة.
+  Widget _buildTaskCard(user_task_model.UserTaskModel userTask) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('tasks')
@@ -87,14 +96,14 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
         }
 
         final taskData = snapshot.data!.data() as Map<String, dynamic>;
-        // هنا نستخدم TaskModel من الملف الأول وهو صحيح
         final task = TaskModel.fromMap(taskData);
 
         return Card(
           elevation: 3,
           margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             title: Text(
               task.typeDisplayName,
               style: const TextStyle(fontWeight: FontWeight.bold),
@@ -108,7 +117,9 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
               ),
             ),
             trailing: Icon(
-              userTask.isCompleted ? Icons.check_circle : Icons.hourglass_top_rounded,
+              userTask.isCompleted
+                  ? Icons.check_circle
+                  : Icons.hourglass_top_rounded,
               color: userTask.isCompleted ? Colors.green : Colors.orange,
               size: 28,
             ),

@@ -12,12 +12,20 @@ class AdminTasksHistoryScreen extends StatefulWidget {
 }
 
 class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   List<Map<String, dynamic>> _allTasks = [];
   List<Map<String, dynamic>> _filteredTasks = [];
   bool _isLoading = true;
 
   final TextEditingController _searchController = TextEditingController();
   String? _selectedStatus; // 'completed', 'in_progress'
+
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
+  // ===========================================================================
 
   @override
   void initState() {
@@ -32,10 +40,58 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
     super.dispose();
   }
 
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
+  // ===========================================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('سجل المهام'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _showFilterBottomSheet,
+            tooltip: 'تصفية',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredTasks.isEmpty
+                    ? const Center(child: Text('لا توجد مهام تطابق البحث.'))
+                    : RefreshIndicator(
+                        onRefresh: _loadTasks,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(8.0),
+                          itemCount: _filteredTasks.length,
+                          itemBuilder: (context, index) {
+                            return _buildTaskCard(_filteredTasks[index]);
+                          },
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي (Core Business Logic)
+  // ===========================================================================
+
   Future<void> _loadTasks() async {
     setState(() => _isLoading = true);
     final adminId = FirebaseAuth.instance.currentUser?.uid;
-    if (adminId == null) return;
+    if (adminId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -57,11 +113,14 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        // يمكنك إضافة رسالة خطأ هنا
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في تحميل المهام: $e')),
+        );
       }
     }
   }
 
+  /// *** [تم التصحيح النهائي] *** دالة لتصفية المهام بطريقة أكثر قوة.
   void _filterTasks() {
     final query = _searchController.text.toLowerCase();
     setState(() {
@@ -72,10 +131,11 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
             (task['notes'] as String? ?? '').toLowerCase().contains(query) ||
             (task['college'] as String? ?? '').toLowerCase().contains(query);
 
+        final bool isTaskCompleted = _isTaskConsideredComplete(task);
+
         final matchesStatus = _selectedStatus == null ||
-            (_selectedStatus == 'completed' && task['isCompleted'] == true) ||
-            (_selectedStatus == 'in_progress' &&
-                (task['isCompleted'] == false || task['isCompleted'] == null));
+            (_selectedStatus == 'completed' && isTaskCompleted) ||
+            (_selectedStatus == 'in_progress' && !isTaskCompleted);
 
         return matchesSearch && matchesStatus;
       }).toList();
@@ -137,42 +197,9 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('سجل المهام'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterBottomSheet,
-            tooltip: 'تصفية',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredTasks.isEmpty
-                    ? const Center(child: Text('لا توجد مهام تطابق البحث.'))
-                    : RefreshIndicator(
-                        onRefresh: _loadTasks,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(8.0),
-                          itemCount: _filteredTasks.length,
-                          itemBuilder: (context, index) {
-                            return _buildTaskCard(_filteredTasks[index]);
-                          },
-                        ),
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ===========================================================================
+  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets)
+  // ===========================================================================
 
   Widget _buildSearchBar() {
     return Padding(
@@ -189,7 +216,8 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
   }
 
   Widget _buildTaskCard(Map<String, dynamic> task) {
-    final bool isCompleted = task['isCompleted'] ?? false;
+    final bool isCompleted = _isTaskConsideredComplete(task);
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       child: ListTile(
@@ -205,9 +233,34 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
             MaterialPageRoute(
               builder: (context) => AdminTaskDetailsScreen(task: task),
             ),
-          ).then((_) => _loadTasks()); // تحديث القائمة بعد العودة
+          ).then((_) => _loadTasks());
         },
       ),
     );
+  }
+
+  // ===========================================================================
+  // 6. الدوال المساعدة (Helper Functions)
+  // ===========================================================================
+
+  /// *** [جديد ومهم] *** دالة موحدة لتحديد ما إذا كانت المهمة مكتملة.
+  bool _isTaskConsideredComplete(Map<String, dynamic> task) {
+    // الحالة 1: التحقق من علامة الإكمال الصريحة
+    if (task['isCompleted'] == true) {
+      return true;
+    }
+    // الحالة 2: التحقق من وجود تاريخ للإكمال
+    if (task['completedAt'] != null) {
+      return true;
+    }
+    // الحالة 3 (الأهم): التحقق من نسبة الإنجاز
+    final percentage =
+        (task['completionPercentage'] as num?)?.toDouble() ?? 0.0;
+    if (percentage >= 100.0) {
+      return true;
+    }
+
+    // إذا لم يتحقق أي من الشروط، فالمهمة غير مكتملة
+    return false;
   }
 }

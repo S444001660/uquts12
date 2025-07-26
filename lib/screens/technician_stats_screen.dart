@@ -1,10 +1,8 @@
-// technician_stats_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import '../models/user_account_model.dart';
-import '../utils/ui_helpers.dart'; // For error snackbar
+import '../utils/ui_helpers.dart';
 
 class TechnicianStatsScreen extends StatefulWidget {
   final UserAccountModel user;
@@ -15,6 +13,10 @@ class TechnicianStatsScreen extends StatefulWidget {
 }
 
 class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
+  // ===========================================================================
+  // 1. تعريفات الحالة (State Definitions)
+  // ===========================================================================
+
   bool _isLoading = true;
 
   // Overall Stats
@@ -32,33 +34,74 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
   // Chart Data
   List<BarChartGroupData> _weeklyChartData = [];
 
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // ===========================================================================
+
   @override
   void initState() {
     super.initState();
     _fetchStats();
   }
 
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text('ملخص الأداء'),
+        backgroundColor: theme.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _fetchStats,
+              child: ListView(
+                padding: const EdgeInsets.all(16.0),
+                children: [
+                  _buildHeader(theme),
+                  const SizedBox(height: 24),
+                  _buildSummaryGrid(theme),
+                  const SizedBox(height: 24),
+                  _buildChartSection(theme),
+                  const SizedBox(height: 24),
+                  _buildTimeBasedStats(theme),
+                ],
+              ),
+            ),
+    );
+  }
+
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي (Core Business Logic) - (أساسي)
+  // ===========================================================================
+
+  /// دالة لجلب ومعالجة جميع الإحصائيات من قاعدة البيانات.
   Future<void> _fetchStats() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     final now = DateTime.now();
-    // Sunday as start of the week
-    final startOfWeek = now.subtract(Duration(days: now.weekday % 7));
+    final startOfWeek =
+        now.subtract(Duration(days: now.weekday % 7)); // Sunday as start
     final startOfMonth = DateTime(now.year, now.month, 1);
     final startOfYear = DateTime(now.year, 1, 1);
-
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // Fetch all completed tasks for the user
       final tasksSnapshot = await firestore
           .collection('user_tasks')
           .where('userId', isEqualTo: widget.user.uid)
           .where('isCompleted', isEqualTo: true)
           .get();
 
-      // Fetch all devices created by the user
       final devicesSnapshot = await firestore
           .collection('devices')
           .where('createdBy', isEqualTo: widget.user.uid)
@@ -76,7 +119,6 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
 
         if (completedAt.isAfter(startOfWeek)) {
           tempWeeklyTasks++;
-          // weekday: Mon=1, ..., Sun=7. We want Sun=0, ..., Sat=6
           int dayIndex = completedAt.weekday % 7;
           weeklyTaskCounts[dayIndex]++;
         }
@@ -121,6 +163,11 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
     }
   }
 
+  // ===========================================================================
+  // 5. دوال بناء مكونات الواجهة والبيانات المساعدة (UI & Data Helpers)
+  // ===========================================================================
+
+  /// دالة لتوليد بيانات الرسم البياني الأسبوعي.
   List<BarChartGroupData> _generateChartData(List<int> dailyCounts) {
     return List.generate(7, (index) {
       return BarChartGroupData(
@@ -140,37 +187,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text('ملخص الأداء'),
-        backgroundColor: theme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _fetchStats,
-              child: ListView(
-                padding: const EdgeInsets.all(16.0),
-                children: [
-                  _buildHeader(theme),
-                  const SizedBox(height: 24),
-                  _buildSummaryGrid(theme),
-                  const SizedBox(height: 24),
-                  _buildChartSection(theme),
-                  const SizedBox(height: 24),
-                  _buildTimeBasedStats(theme),
-                ],
-              ),
-            ),
-    );
-  }
-
+  /// ويدجت لبناء ترويسة الشاشة التي تعرض معلومات المستخدم.
   Widget _buildHeader(ThemeData theme) {
     return Row(
       children: [
@@ -193,16 +210,14 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
             children: [
               Text(
                 widget.user.fullName,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
                 'فني صيانة',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: Colors.grey[600],
-                ),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(color: Colors.grey[600]),
               ),
             ],
           ),
@@ -211,6 +226,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
     );
   }
 
+  /// ويدجت لبناء شبكة عرض الإحصائيات الإجمالية.
   Widget _buildSummaryGrid(ThemeData theme) {
     return GridView.count(
       crossAxisCount: 2,
@@ -252,6 +268,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
     );
   }
 
+  /// ويدجت مساعد لبناء بطاقة إحصائية واحدة.
   Widget _buildStatCard({
     required String title,
     required String value,
@@ -286,15 +303,13 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
             children: [
               Text(
                 value,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               Text(
                 title,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
-                ),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: Colors.grey[600]),
               ),
             ],
           ),
@@ -303,6 +318,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
     );
   }
 
+  /// ويدجت لبناء قسم الرسم البياني.
   Widget _buildChartSection(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,10 +328,10 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
           style:
               theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
-          height: 350,
+          height: 300,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -347,11 +363,9 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
                     showTitles: true,
                     getTitlesWidget: (value, meta) {
                       const style = TextStyle(
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      );
-                      // Sun=0, Mon=1, ...
+                          color: Colors.grey,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12);
                       List<String> days = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'];
                       return SideTitleWidget(
                         axisSide: meta.axisSide,
@@ -368,7 +382,6 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
                     reservedSize: 28,
                     getTitlesWidget: (value, meta) {
                       if (value == 0 || value % 2 != 0) {
-                        // Show only odd numbers and 0
                         return const Text('');
                       }
                       return Text(
@@ -397,6 +410,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
     );
   }
 
+  /// ويدجت لبناء قسم الإحصائيات الزمنية (أسبوعي، شهري، سنوي).
   Widget _buildTimeBasedStats(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,30 +421,16 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
               theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        _buildTimeStatRow(
-          'هذا الأسبوع',
-          _weeklyTasks,
-          _weeklyDevices,
-          theme,
-        ),
+        _buildTimeStatRow('هذا الأسبوع', _weeklyTasks, _weeklyDevices, theme),
         const Divider(height: 24),
-        _buildTimeStatRow(
-          'هذا الشهر',
-          _monthlyTasks,
-          _monthlyDevices,
-          theme,
-        ),
+        _buildTimeStatRow('هذا الشهر', _monthlyTasks, _monthlyDevices, theme),
         const Divider(height: 24),
-        _buildTimeStatRow(
-          'هذه السنة',
-          _yearlyTasks,
-          _yearlyDevices,
-          theme,
-        ),
+        _buildTimeStatRow('هذه السنة', _yearlyTasks, _yearlyDevices, theme),
       ],
     );
   }
 
+  /// ويدجت مساعد لبناء صف واحد في قسم الإحصائيات الزمنية.
   Widget _buildTimeStatRow(
       String label, int tasks, int devices, ThemeData theme) {
     return Row(

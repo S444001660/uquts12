@@ -1,86 +1,151 @@
 // استيراد الدوال المطلوبة من الإصدار الثاني (v2)
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onDocumentDeleted } = require("firebase-functions/v2/firestore"); // استيراد onDocumentDeleted
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const logger = require("firebase-functions/logger");
 
 // تهيئة حزمة الأدمن
 admin.initializeApp();
+const db = admin.firestore();
+const auth = admin.auth();
 
 // تحديد المنطقة الجغرافية للخادم
 setGlobalOptions({ region: "us-central1" });
 
 /**
- * دالة سحابية لإنشاء مستخدم جديد (بالصيغة الصحيحة v2)
- * هذه الدالة تُستدعى من جانب العميل (تطبيق Flutter) لإنشاء حسابات مستخدمين جديدة.
- * تتطلب صلاحيات إدارية (admin role) للمستخدم الذي يستدعيها.
+ * دالة لإنشاء مستخدم جديد مع دوره وبياناته في Firestore.
+ * تتطلب صلاحيات إدارية (admin).
  */
 exports.createUser = onCall(async (request) => {
-  // التحقق من أن الشخص الذي استدعى هذه الدالة هو أدمن
-  // (يفترض أن الدور "admin" يتم تعيينه كـ Custom Claim للمستخدمين المديرين)
+  // التحقق من أن المستدعي هو أدمن
   if (request.auth?.token?.role !== "admin") {
-    // استخدام HttpsError مباشرة لإرجاع خطأ مفهوم للعميل
     throw new HttpsError(
-      "permission-denied", // نوع الخطأ
-      "ليس لديك الصلاحية لتنفيذ هذه العملية." // رسالة الخطأ للمستخدم
+      "permission-denied",
+      "ليس لديك الصلاحية لتنفيذ هذه العملية."
     );
   }
 
-  // استخراج البيانات القادمة من التطبيق
-  const email = request.data.email;
-  const password = request.data.password;
-  const displayName = request.data.displayName;
-  // يمكنك إضافة حقول أخرى مثل employeeId هنا إذا أردت إرسالها من التطبيق
+  const { email, password, fullName, employeeId, role = 'technician' } = request.data;
 
-  // التحقق من أن كل البيانات المطلوبة موجودة
-  if (!email || !password || !displayName) {
+  if (!email || !password || !fullName || !employeeId) {
     throw new HttpsError(
-      "invalid-argument", // نوع الخطأ
-      "البيانات المرسلة غير مكتملة. يرجى تعبئة كل الحقول." // رسالة الخطأ للمستخدم
+      "invalid-argument",
+      "البيانات المرسلة غير مكتملة. يرجى تعبئة كل الحقول."
     );
   }
 
   try {
-    // 1. إنشاء المستخدم في نظام المصادقة (Authentication)
-    const userRecord = await admin.auth().createUser({
+    // 1. إنشاء المستخدم في Authentication
+    const userRecord = await auth.createUser({
       email: email,
       password: password,
-      displayName: displayName,
+      displayName: fullName,
     });
 
-    // 2. تعيين دور "technician" للمستخدم الجديد كـ Custom Claim
-    // هذا الدور سيُستخدم للتحقق من الصلاحيات في قواعد Firestore والتطبيق.
-    await admin.auth().setCustomUserClaims(userRecord.uid, { role: "technician" });
+    // 2. تعيين الدور كـ Custom Claim
+    await auth.setCustomUserClaims(userRecord.uid, { role: role });
 
-    // 3. إنشاء مستند للمستخدم في قاعدة بيانات Firestore
-    // هذا المستند سيحتوي على بيانات إضافية للمستخدم (مثل النقاط، المهام، إلخ)
+    // 3. إنشاء مستند للمستخدم في Firestore
     const userDoc = {
       uid: userRecord.uid,
       email: email,
-      fullName: displayName,
-      role: "technician", // تخزين الدور في Firestore أيضاً
-      createdAt: admin.firestore.FieldValue.serverTimestamp(), // وقت إنشاء الخادم
-      isActive: true, // المستخدم نشط افتراضياً
-      points: 0, // نقاط افتراضية
-      tasksCompleted: 0, // مهام مكتملة افتراضية
-      devicesRegistered: 0, // أجهزة مسجلة افتراضية
-      // يمكنك إضافة employeeId هنا إذا تم إرساله من التطبيق
-      // employeeId: request.data.employeeId || null,
+      fullName: fullName,
+      employeeId: employeeId,
+      role: role,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isActive: true,
+      points: 0,
+      tasksCompleted: 0,
+      devicesRegistered: 0,
     };
-    await admin.firestore().collection("users").doc(userRecord.uid).set(userDoc);
+    await db.collection("users").doc(userRecord.uid).set(userDoc);
 
-    console.log(`تم إنشاء المستخدم بنجاح: ${email} (UID: ${userRecord.uid})`);
-    // إرجاع استجابة نجاح إلى العميل
+    logger.info(`تم إنشاء المستخدم بنجاح: ${email} (UID: ${userRecord.uid})`);
     return { success: true, uid: userRecord.uid, message: "تم إنشاء المستخدم بنجاح." };
 
   } catch (error) {
-    console.error("خطأ في إنشاء المستخدم الجديد:", error);
-    // التحقق من أنواع أخطاء Firebase Auth المحددة لإرجاع رسائل أفضل
-    if (error.code === 'auth/email-already-in-use') {
+    logger.error("خطأ في إنشاء المستخدم الجديد:", error);
+    if (error.code === 'auth/email-already-exists') {
       throw new HttpsError('already-exists', 'البريد الإلكتروني هذا مستخدم بالفعل.');
     } else if (error.code === 'auth/weak-password') {
-      throw new HttpsError('invalid-argument', 'كلمة المرور ضعيفة جدًا.');
+      throw new HttpsError('invalid-argument', 'كلمة المرور ضعيفة جدًا. يجب أن تكون 6 أحرف على الأقل.');
     }
-    // إرجاع رسالة الخطأ العامة إلى التطبيق
-    throw new HttpsError("internal", error.message);
+    throw new HttpsError("internal", "حدث خطأ غير معروف أثناء إنشاء المستخدم.");
+  }
+});
+
+/**
+ * دالة لتحديث دور المستخدم (مثلاً، من فني إلى مشرف).
+ * تتطلب صلاحيات إدارية (admin).
+ */
+exports.updateUserRole = onCall(async (request) => {
+  if (request.auth?.token?.role !== "admin") {
+    throw new HttpsError("permission-denied", "ليس لديك الصلاحية لتنفيذ هذه العملية.");
+  }
+
+  const { uid, newRole } = request.data;
+  const validRoles = ["admin", "supervisor", "technician"];
+
+  if (!uid || !newRole || !validRoles.includes(newRole)) {
+    throw new HttpsError("invalid-argument", "البيانات المرسلة غير صحيحة.");
+  }
+
+  try {
+    // 1. تحديث الدور في Custom Claims
+    await auth.setCustomUserClaims(uid, { role: newRole });
+    // 2. تحديث الدور في مستند Firestore
+    await db.collection("users").doc(uid).update({ role: newRole });
+
+    logger.info(`تم تحديث دور المستخدم ${uid} إلى ${newRole}`);
+    return { success: true, message: "تم تحديث دور المستخدم بنجاح." };
+  } catch (error) {
+    logger.error(`خطأ في تحديث دور المستخدم ${uid}:`, error);
+    throw new HttpsError("internal", "فشل تحديث دور المستخدم.");
+  }
+});
+
+/**
+ * دالة لتفعيل أو تعطيل حساب مستخدم.
+ * تتطلب صلاحيات إدارية (admin).
+ */
+exports.toggleUserStatus = onCall(async (request) => {
+  if (request.auth?.token?.role !== "admin") {
+    throw new HttpsError("permission-denied", "ليس لديك الصلاحية لتنفيذ هذه العملية.");
+  }
+
+  const { uid, isActive } = request.data;
+
+  if (!uid || typeof isActive !== 'boolean') {
+    throw new HttpsError("invalid-argument", "البيانات المرسلة غير صحيحة.");
+  }
+
+  try {
+    // 1. تحديث حالة الحساب في Auth (تعطيل/تفعيل)
+    await auth.updateUser(uid, { disabled: !isActive });
+    // 2. تحديث حالة الحساب في Firestore
+    await db.collection("users").doc(uid).update({ isActive: isActive });
+
+    logger.info(`تم تغيير حالة المستخدم ${uid} إلى ${isActive ? 'نشط' : 'معطل'}`);
+    return { success: true, message: `تم ${isActive ? 'تفعيل' : 'تعطيل'} الحساب بنجاح.` };
+  } catch (error) {
+    logger.error(`خطأ في تغيير حالة المستخدم ${uid}:`, error);
+    throw new HttpsError("internal", "فشل تغيير حالة الحساب.");
+  }
+});
+
+/**
+ * دالة تلقائية (trigger) لحذف بيانات المستخدم من Firestore
+ * عند حذفه من نظام المصادقة.
+ */
+exports.onUserDeleted = functions.auth.user().onDelete(async (user) => {
+  const uid = user.uid;
+  try {
+    await db.collection("users").doc(uid).delete();
+    logger.info(`تم حذف بيانات المستخدم ${uid} من Firestore بنجاح.`);
+    return null;
+  } catch (error) {
+    logger.error(`خطأ في حذف بيانات المستخدم ${uid} من Firestore:`, error);
+    return null;
   }
 });

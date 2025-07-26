@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
-// لاستخدام debugPrint
-// لتنسيق التاريخ والوقت
-
-import '../models/device_model.dart'; // نموذج بيانات الجهاز.
-import '../models/lab_model.dart'; // نموذج بيانات المعمل (لاستخدام LabStatus).
-import 'package:uquts1/services/firebase_database_service.dart';
-import '../utils/ui_helpers.dart'; // دوال مساعدة لعرض عناصر واجهة المستخدم.
-import 'add_device_screen.dart'; // شاشة إضافة/تعديل جهاز.
+import 'package:flutter/foundation.dart';
+import '../models/device_model.dart';
+import '../models/lab_model.dart';
+import '../services/firebase_database_service.dart';
+import '../utils/ui_helpers.dart';
+import 'add_device_screen.dart';
 
 //------------------------------------------------------------------------------
 
-/// ويدجت شاشة عرض تفاصيل الجهاز، وهي StatefulWidget لإدارة الحالات الداخلية.
-/// هذه الشاشة مخصصة للعرض فقط، مع زر للانتقال إلى شاشة التعديل.
 class ViewDeviceScreen extends StatefulWidget {
   final DeviceModel device;
 
@@ -26,74 +22,36 @@ class ViewDeviceScreen extends StatefulWidget {
 
 //------------------------------------------------------------------------------
 
-/// كلاس الحالة (State) الخاص بـ ViewDeviceScreen.
 class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
-  // --- متغيرات الحالة (State Variables) ---
-  late DeviceModel
-      _currentDevice; // لتخزين بيانات الجهاز الحالية، ويمكن تحديثها.
-  LabModel? _associatedLab; // لتخزين تفاصيل المعمل المرتبط بالجهاز.
-  bool _isLoading = true; // لتتبع حالة التحميل.
+  // ===========================================================================
+  // 1. تعريفات الحالة (State Definitions)
+  // ===========================================================================
 
-  //------------------------------------------------------------------------------
+  late DeviceModel _currentDevice;
+  LabModel? _associatedLab;
+  bool _isLoading = true;
 
-  /// دالة initState: يتم استدعاؤها مرة واحدة عند إنشاء الويدجت.
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // ===========================================================================
+
   @override
   void initState() {
     super.initState();
-    _currentDevice = widget.device; // تهيئة متغير الحالة بالبيانات الممررة.
+    _currentDevice = widget.device;
     debugPrint('ViewDeviceScreen: Initial device ID: ${widget.device.id}');
     debugPrint(
         'ViewDeviceScreen: Initial device imagePath: ${widget.device.imagePath}');
-    _loadDeviceAndLabDetails(); // تحميل تفاصيل الجهاز والمعمل.
+    _loadDeviceAndLabDetails();
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
 
-  /// دالة غير متزامنة لتحميل أحدث تفاصيل الجهاز والمعمل المرتبط به.
-  /// هذا يضمن أن البيانات المعروضة هي الأحدث دائمًا.
-  Future<void> _loadDeviceAndLabDetails() async {
-    setState(() => _isLoading = true);
-    try {
-      // جلب أحدث بيانات الجهاز من قاعدة البيانات (للتأكد من التحديثات).
-      final updatedDevice =
-          await FirebaseDatabaseService.getDeviceById(_currentDevice.id);
-      if (updatedDevice != null && mounted) {
-        _currentDevice = updatedDevice;
-        debugPrint(
-            'ViewDeviceScreen: Updated device imagePath after reload: ${_currentDevice.imagePath}');
-      } else {
-        debugPrint(
-            'ViewDeviceScreen: Device not found on reload or widget not mounted.');
-      }
-
-      // جلب تفاصيل المعمل المرتبط بالجهاز.
-      if (_currentDevice.labId.isNotEmpty) {
-        _associatedLab =
-            await FirebaseDatabaseService.getLabById(_currentDevice.labId);
-        debugPrint(
-            'ViewDeviceScreen: Associated Lab: ${_associatedLab?.labNumber}');
-      } else {
-        debugPrint('ViewDeviceScreen: No lab ID for this device.');
-      }
-
-      setState(() => _isLoading = false);
-    } catch (e) {
-      debugPrint('Error loading device or lab details in ViewDeviceScreen: $e');
-      if (mounted) {
-        UIHelpers.showErrorSnackBar(context, 'خطأ في تحميل التفاصيل: $e');
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// الدالة الأساسية لبناء واجهة المستخدم (UI) للشاشة بأكملها.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // تحقق من صلاحية رابط الصورة قبل بناء الواجهة لتجنب الأخطاء.
     final bool hasValidImageUrl = _currentDevice.imagePath != null &&
         _currentDevice.imagePath!.startsWith('http');
     debugPrint(
@@ -105,7 +63,6 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,
         actions: [
-          // زر التعديل: ينقلك مباشرة إلى شاشة AddDeviceScreen للتعديل الفعلي.
           IconButton(
             icon: const Icon(Icons.edit),
             tooltip: 'تعديل الجهاز',
@@ -116,7 +73,6 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
                   builder: (context) => AddDeviceScreen(device: _currentDevice),
                 ),
               ).then((_) {
-                // تحديث البيانات عند العودة من شاشة التعديل لضمان عرض أحدث المعلومات.
                 _loadDeviceAndLabDetails();
               });
             },
@@ -130,30 +86,21 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // قسم صورة الجهاز (يظهر فقط إذا كان هناك imagePath صالح)
-                  if (hasValidImageUrl) // <--- الشرط هنا
+                  if (hasValidImageUrl)
                     Column(
                       children: [
                         _buildImageSection(theme),
                         const SizedBox(height: 16),
                       ],
                     ),
-
-                  // بطاقة معلومات الجهاز الأساسية
                   _buildMainInfoCard(theme),
                   const SizedBox(height: 16),
-
-                  // بطاقة تفاصيل المعمل (إذا كان المعمل مرتبطاً)
                   if (_associatedLab != null) ...[
                     _buildLabInfoCard(theme),
                     const SizedBox(height: 16),
                   ],
-
-                  // بطاقة مواصفات الجهاز
                   _buildSpecificationsCard(theme),
                   const SizedBox(height: 16),
-
-                  // بطاقة الملاحظات (تظهر فقط إذا كانت هناك ملاحظات)
                   if (_currentDevice.notes.isNotEmpty) _buildNotesCard(theme),
                 ],
               ),
@@ -161,7 +108,49 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي (Core Business Logic) - (أساسي)
+  // ===========================================================================
+
+  /// دالة غير متزامنة لتحميل أحدث تفاصيل الجهاز والمعمل المرتبط به.
+  Future<void> _loadDeviceAndLabDetails() async {
+    setState(() => _isLoading = true);
+    try {
+      final updatedDevice =
+          await FirebaseDatabaseService.getDeviceById(_currentDevice.id);
+      if (updatedDevice != null && mounted) {
+        _currentDevice = updatedDevice;
+        debugPrint(
+            'ViewDeviceScreen: Updated device imagePath after reload: ${_currentDevice.imagePath}');
+      } else {
+        debugPrint(
+            'ViewDeviceScreen: Device not found on reload or widget not mounted.');
+      }
+
+      if (_currentDevice.labId.isNotEmpty) {
+        _associatedLab =
+            await FirebaseDatabaseService.getLabById(_currentDevice.labId);
+        debugPrint(
+            'ViewDeviceScreen: Associated Lab: ${_associatedLab?.labNumber}');
+      } else {
+        debugPrint('ViewDeviceScreen: No lab ID for this device.');
+      }
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading device or lab details in ViewDeviceScreen: $e');
+      if (mounted) {
+        UIHelpers.showErrorSnackBar(context, 'خطأ في تحميل التفاصيل: $e');
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets) - (يمكن فصلها)
+  // ===========================================================================
 
   /// ويدجت مساعد لبناء قسم عرض صورة الجهاز.
   Widget _buildImageSection(ThemeData theme) {
@@ -212,8 +201,6 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
   /// ويدجت مساعد لبناء بطاقة المعلومات الأساسية للجهاز.
   Widget _buildMainInfoCard(ThemeData theme) {
     return Card(
@@ -247,8 +234,6 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
   /// ويدجت مساعد لبناء بطاقة تفاصيل المعمل المرتبط بالجهاز.
   Widget _buildLabInfoCard(ThemeData theme) {
     return Card(
@@ -275,8 +260,6 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
       ),
     );
   }
-
-  //------------------------------------------------------------------------------
 
   /// ويدجت مساعد لبناء بطاقة مواصفات الجهاز الفنية.
   Widget _buildSpecificationsCard(ThemeData theme) {
@@ -307,8 +290,6 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
   /// ويدجت مساعد لبناء بطاقة الملاحظات.
   Widget _buildNotesCard(ThemeData theme) {
     return Card(
@@ -325,8 +306,6 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
       ),
     );
   }
-
-  //------------------------------------------------------------------------------
 
   /// دالة مساعدة قابلة لإعادة الاستخدام لبناء صف تفصيلي منسق.
   Widget _buildDetailRow(IconData icon, String label, String value,
@@ -346,7 +325,7 @@ class _ViewDeviceScreenState extends State<ViewDeviceScreen> {
             child: Text(
               value,
               style: TextStyle(color: color),
-              softWrap: true, // للسماح للنص بالالتفاف إذا كان طويلاً.
+              softWrap: true,
             ),
           ),
         ],

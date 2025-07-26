@@ -1,71 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart'; // لاستخدام IconData و Color
+import 'package:flutter/material.dart';
+import 'package:equatable/equatable.dart'; // <-- 1. استيراد الحزمة الجديدة
 
 //------------------------------------------------------------------------------
 
-/// تعداد (Enum) لتمثيل حالة المعمل بشكل واضح ومقروء.
 enum LabStatus {
-  openWithDevices, // أخضر: المعمل مفتوح وبه أجهزة
-  openNoDevices, // برتقالي: المعمل مفتوح ولكن لا يحتوي على أجهزة
-  closed, // أحمر: المعمل مغلق
+  openWithDevices,
+  openNoDevices,
+  closed,
 }
 
 //------------------------------------------------------------------------------
 
 /// نموذج بيانات (Data Model) يمثل "المعمل" داخل النظام.
-/// هذا الكلاس هو المخطط الهندسي (Blueprint) الذي يحدد خصائص ووظائف أي معمل.
-class LabModel {
+/// يرث من Equatable لضمان المقارنة الصحيحة بين الكائنات.
+class LabModel extends Equatable {
+  // <-- 2. جعله يرث من Equatable
   // --- الخصائص الأساسية للمعمل ---
-  /// معرف فريد للمعمل (UUID).
   final String id;
-
-  /// رقم المعمل (مثل: A1، B12).
   final String labNumber;
-
-  /// اسم الكلية التي يتبع لها المعمل.
   final String college;
-
-  /// اسم القسم التابع للمعمل.
   final String department;
-
-  /// رقم الدور الموجود فيه المعمل.
   final String floorNumber;
-
-  /// نوع المعمل (مثل: حاسب، فيزياء، شبكات...).
   final String type;
-
-  /// الحالة الحالية للمعمل (مفتوح/مغلق).
   final LabStatus status;
-
-  /// ملاحظات إدارية أو فنية على المعمل.
   final String notes;
-
-  /// قائمة معرفات الأجهزة المرتبطة بهذا المعمل.
   final List<String> deviceIds;
-
-  /// وقت إنشاء السجل.
   final DateTime createdAt;
-
-  /// وقت آخر تعديل.
   final DateTime updatedAt;
-
-  /// مسار صورة المعمل (اختياري)، يمكن أن يكون URL من Firebase Storage.
   final String? imagePath;
-
-  /// رابط لموقع المعمل (Google Maps).
   final String? locationUrl;
-
-  /// إحداثيات الموقع - خط العرض.
   final double? latitude;
-
-  /// إحداثيات الموقع - خط الطول.
   final double? longitude;
-
   final String? createdBy;
+  final String? createdByName; // <-- 3. إضافة الحقل الجديد لتحسين الأداء
 
   //------------------------------------------------------------------------------
 
-  /// البناء (Constructor) لإنشاء كائن جديد من نوع LabModel.
   const LabModel({
     required this.id,
     required this.labNumber,
@@ -75,7 +46,7 @@ class LabModel {
     required this.type,
     required this.status,
     required this.notes,
-    this.deviceIds = const [], // تعيين قيمة افتراضية فارغة للقائمة
+    this.deviceIds = const [],
     required this.createdAt,
     required this.updatedAt,
     this.imagePath,
@@ -83,12 +54,18 @@ class LabModel {
     this.latitude,
     this.longitude,
     this.createdBy,
+    this.createdByName, // <-- 4. إضافته للبناء
   });
 
   //------------------------------------------------------------------------------
 
-  /// دالة لتحويل كائن LabModel إلى خريطة (Map) من نوع <String, dynamic>.
-  /// هذه الصيغة مناسبة لتخزين البيانات في قاعدة بيانات Firestore.
+  /// *** [مهم] *** تحديد الخصائص التي سيتم استخدامها للمقارنة بين كائنين.
+  /// هنا، نعتبر أن معملين متساويين إذا كان لهما نفس الـ id.
+  @override
+  List<Object?> get props => [id];
+
+  //------------------------------------------------------------------------------
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -97,64 +74,56 @@ class LabModel {
       'department': department,
       'floorNumber': floorNumber,
       'type': type,
-      'status': status.name, // تخزين اسم الـ enum كـ String لسهولة القراءة
+      'status': status.name,
       'notes': notes,
       'deviceIds': deviceIds,
-      'createdAt':
-          Timestamp.fromDate(createdAt), // تحويل DateTime إلى Timestamp
-      'updatedAt':
-          Timestamp.fromDate(updatedAt), // تحويل DateTime إلى Timestamp
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
       'imagePath': imagePath,
       'locationUrl': locationUrl,
       'latitude': latitude,
       'longitude': longitude,
       'createdBy': createdBy,
+      'createdByName': createdByName, // <-- 5. إضافته للخريطة
     };
   }
 
   //------------------------------------------------------------------------------
 
-  /// دالة مصنع (Factory Constructor) لبناء كائن LabModel من خريطة (Map).
-  /// تُستخدم عند قراءة البيانات من Firestore وتحويلها إلى كائن Dart.
   factory LabModel.fromMap(Map<String, dynamic> map) {
-    // دالة مساعدة داخلية لتحويل أنواع مختلفة من بيانات التاريخ إلى DateTime.
     DateTime parseDateTime(dynamic value) {
       if (value is Timestamp) {
         return value.toDate();
-      } else if (value is int) {
-        return DateTime.fromMillisecondsSinceEpoch(value);
       }
-      return DateTime.now(); // قيمة احتياطية إذا كان النوع غير معروف.
+      return DateTime.now();
     }
 
     return LabModel(
-      id: map['id'] as String,
-      labNumber: map['labNumber'] as String,
-      college: map['college'] as String,
-      department: map['department'] as String,
-      floorNumber: map['floorNumber'] as String,
-      type:
-          map['type'] as String? ?? '', // تأكد من التعامل مع القيمة الافتراضية
+      id: map['id'] ?? '',
+      labNumber: map['labNumber'] ?? '',
+      college: map['college'] ?? '',
+      department: map['department'] ?? '',
+      floorNumber: map['floorNumber'] ?? '',
+      type: map['type'] ?? '',
       status: LabStatus.values.firstWhere(
-        (e) => e.name == map['status'], // مقارنة باسم الـ enum
-        orElse: () => LabStatus.closed, // الحالة الافتراضية: مغلق
+        (e) => e.name == map['status'],
+        orElse: () => LabStatus.closed,
       ),
-      notes: map['notes'] as String? ?? '',
+      notes: map['notes'] ?? '',
       deviceIds: List<String>.from(map['deviceIds'] ?? []),
-      createdAt: parseDateTime(map['createdAt']), // استخدام الدالة المساعدة.
-      updatedAt: parseDateTime(map['updatedAt']), // استخدام الدالة المساعدة.
-      imagePath: map['imagePath'] as String?,
-      locationUrl: map['locationUrl'] as String?,
-      latitude: map['latitude'] as double?,
-      longitude: map['longitude'] as double?,
-      createdBy: map['createdBy'] as String?,
+      createdAt: parseDateTime(map['createdAt']),
+      updatedAt: parseDateTime(map['updatedAt']),
+      imagePath: map['imagePath'],
+      locationUrl: map['locationUrl'],
+      latitude: map['latitude'],
+      longitude: map['longitude'],
+      createdBy: map['createdBy'],
+      createdByName: map['createdByName'], // <-- 6. إضافته هنا
     );
   }
 
   //------------------------------------------------------------------------------
 
-  /// دالة لإنشاء نسخة جديدة من الكائن مع إمكانية تغيير بعض القيم.
-  /// مفيدة للحفاظ على البيانات غير القابلة للتغيير (immutability).
   LabModel copyWith({
     String? id,
     String? labNumber,
@@ -172,6 +141,7 @@ class LabModel {
     double? latitude,
     double? longitude,
     String? createdBy,
+    String? createdByName, // <-- 7. إضافته هنا
   }) {
     return LabModel(
       id: id ?? this.id,
@@ -190,13 +160,12 @@ class LabModel {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       createdBy: createdBy ?? this.createdBy,
-
+      createdByName: createdByName ?? this.createdByName, // <-- 8. إضافته هنا
     );
   }
 
   //------------------------------------------------------------------------------
 
-  /// دالة Getter لترجع لون الحالة لعرضه في الواجهة.
   Color getStatusColor(BuildContext context) {
     switch (status) {
       case LabStatus.openWithDevices:
@@ -210,7 +179,6 @@ class LabModel {
 
   //------------------------------------------------------------------------------
 
-  /// دالة Getter لترجع نص الحالة باللغة العربية.
   String getStatusText() {
     switch (status) {
       case LabStatus.openWithDevices:

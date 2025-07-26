@@ -1,29 +1,37 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:equatable/equatable.dart'; // <-- 1. استيراد الحزمة الجديدة
 
 /// يمثل هذا الكلاس نموذج البيانات لحساب المستخدم الذي سيتم تخزينه في Firestore.
-class UserAccountModel {
+/// يرث من Equatable لضمان المقارنة الصحيحة بين الكائنات.
+class UserAccountModel extends Equatable {
+  // <-- 2. جعله يرث من Equatable
   final String uid; // معرف المستخدم الفريد من Firebase Authentication
   final String email;
   final String fullName;
   final String role; // يمكن أن يكون 'admin' أو 'technician' أو 'supervisor'
   final DateTime createdAt;
-  final bool isActive; // <--- تم إضافة الحقل المفقود هنا
+  final bool isActive;
   final int points;
   final int tasksCompleted;
   final int devicesRegistered;
 
-  UserAccountModel({
+  const UserAccountModel({
     required this.uid,
     required this.email,
     required this.fullName,
     this.role =
         'technician', // القيمة الافتراضية لأي مستخدم جديد هي 'technician'
     required this.createdAt,
-    this.isActive = true, // <--- القيمة الافتراضية عند إنشاء مستخدم جديد
+    this.isActive = true, // القيمة الافتراضية عند إنشاء مستخدم جديد
     this.points = 0,
     this.tasksCompleted = 0,
     this.devicesRegistered = 0,
   });
+
+  /// *** [مهم] *** تحديد الخصائص التي سيتم استخدامها للمقارنة بين كائنين.
+  /// هنا، نعتبر أن حسابين متساويين إذا كان لهما نفس الـ uid.
+  @override
+  List<Object?> get props => [uid];
 
   /// دالة لتحويل بيانات المستخدم إلى صيغة Map لتخزينها في Firestore.
   Map<String, dynamic> toMap() {
@@ -33,7 +41,7 @@ class UserAccountModel {
       'fullName': fullName,
       'role': role,
       'createdAt': Timestamp.fromDate(createdAt),
-      'isActive': isActive, // <--- تضمين الحقل الجديد عند الكتابة في Firestore
+      'isActive': isActive,
       'points': points,
       'tasksCompleted': tasksCompleted,
       'devicesRegistered': devicesRegistered,
@@ -48,8 +56,7 @@ class UserAccountModel {
       fullName: map['fullName'] ?? '',
       role: (map['role'] ?? 'guest').toLowerCase(),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
-      isActive:
-          map['isActive'] ?? true, // <--- استخراج الحقل الجديد عند القراءة
+      isActive: map['isActive'] ?? true,
       points: (map['points'] ?? 0).toInt(),
       tasksCompleted: (map['tasksCompleted'] ?? 0).toInt(),
       devicesRegistered: (map['devicesRegistered'] ?? 0).toInt(),

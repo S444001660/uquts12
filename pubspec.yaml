@@ -68,12 +68,13 @@ dependencies:
   shared_preferences: ^2.2.2
 
 #------------------------------------------------------------------------------
-
+provider: 
 # --- اعتماديات التطوير (Dev Dependencies) ---
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+  equatable: ^2.0.5 # أو أحدث إصدار
 
 #------------------------------------------------------------------------------
 

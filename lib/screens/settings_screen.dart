@@ -6,9 +6,9 @@ import 'package:uquts1/screens/admin/employee_management_screen.dart';
 import 'package:uquts1/screens/admin/reports_screen.dart';
 import 'package:uquts1/screens/technician_stats_screen.dart';
 import 'package:uquts1/screens/user_tasks_screen.dart';
-import '../auth/auth_wrapper.dart'; // للعودة إلى شاشة المصادقة بعد الخروج
-import 'admin/create_user_screen.dart'; // <<<=== هذا هو السطر الجديد والمهم
-import '../services/permissions_service.dart'; // استيراد خدمة الصلاحيات
+import '../auth/auth_wrapper.dart';
+import 'admin/create_user_screen.dart';
+import '../services/permissions_service.dart';
 import 'package:uquts1/models/user_role_model.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -19,49 +19,28 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  // ===========================================================================
+  // 1. تعريفات الحالة (State Definitions)
+  // ===========================================================================
+
   bool _isLoading = true;
   String? _error;
   UserRole? _currentUserRole;
   UserAccountModel? _currentUser;
 
-  Future<void> _loadUserAndData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      // تحميل معلومات المستخدم والصلاحيات
-
-      _currentUserRole = await PermissionsService.getCurrentUserRole();
-      _currentUser = await PermissionsService.getCurrentUserInfo();
-
-      setState(() => _isLoading = false);
-    } catch (e) {
-      setState(() {
-        _error = 'حدث خطأ في تحميل البيانات: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _signOut() async {
-    await FirebaseAuth.instance.signOut();
-    // مسح الذاكرة المؤقتة للصلاحيات عند تسجيل الخروج
-    PermissionsService.clearCache(); // <--- إضافة هذا السطر
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const AuthWrapper()),
-        (Route<dynamic> route) => false,
-      );
-    }
-  }
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // ===========================================================================
 
   @override
   void initState() {
     super.initState();
     _loadUserAndData();
   }
+
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -75,8 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // قسم إدارة النظام (يظهر للأدمن فقط)
-          // قسم إدارة النظام (يظهر للأدمن فقط)
+          // قسم إدارة النظام (يظهر للمدير والمشرف)
           ...(_currentUserRole == UserRole.admin ||
                   _currentUserRole == UserRole.supervisor
               ? [
@@ -135,6 +113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ]
               : []),
 
+          // قسم الفني (يظهر للفني فقط)
           ...(_currentUserRole == UserRole.technician
               ? [
                   Card(
@@ -176,7 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 16),
 
-          // قسم الحساب
+          // قسم الحساب (يظهر للجميع)
           Card(
             elevation: 4,
             child: ListTile(
@@ -188,5 +167,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  // ===========================================================================
+  // 4. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // ===========================================================================
+
+  /// دالة لتحميل بيانات المستخدم وصلاحياته.
+  Future<void> _loadUserAndData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      _currentUserRole = await PermissionsService.getCurrentUserRole();
+      _currentUser = await PermissionsService.getCurrentUserInfo();
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'حدث خطأ في تحميل البيانات: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// دالة لتسجيل الخروج والعودة إلى شاشة المصادقة.
+  Future<void> _signOut() async {
+    await FirebaseAuth.instance.signOut();
+    // مسح الذاكرة المؤقتة للصلاحيات عند تسجيل الخروج
+    PermissionsService.clearCache();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const AuthWrapper()),
+        (Route<dynamic> route) => false,
+      );
+    }
   }
 }

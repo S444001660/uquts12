@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import '../models/lab_model.dart'; // نموذج بيانات المعمل.
-import '../models/device_model.dart'; // نموذج بيانات الجهاز.
-import 'package:uquts1/services/firebase_database_service.dart';
-import '../utils/device_form_constants.dart'; // ثوابت وقوائم مستخدمة في الفورم.
-import '../utils/ui_helpers.dart'; // دوال مساعدة لعرض عناصر واجهة المستخدم.
-import 'add_lab_screen.dart'; // شاشة إضافة معمل.
-import 'lab_details_screen.dart'; // شاشة تفاصيل المعمل.
+import '../models/lab_model.dart';
+import '../models/device_model.dart';
+import '../services/firebase_database_service.dart';
+import '../utils/device_form_constants.dart';
+import '../utils/ui_helpers.dart';
+import 'add_lab_screen.dart';
+import 'lab_details_screen.dart';
 
 //------------------------------------------------------------------------------
 
-/// ويدجت شاشة قائمة المعامل، وهي StatefulWidget لإدارة الحالات الداخلية مثل البحث والتصفية.
 class LabsListScreen extends StatefulWidget {
   const LabsListScreen({super.key});
 
@@ -19,189 +18,48 @@ class LabsListScreen extends StatefulWidget {
 
 //------------------------------------------------------------------------------
 
-/// كلاس الحالة (State) الخاص بـ LabsListScreen.
 class _LabsListScreenState extends State<LabsListScreen> {
-  // --- ثوابت لتنظيم الكود وتوحيد التصميم ---
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   static const double _defaultPadding = 16.0;
   static const double _iconSize = 64.0;
 
-  //------------------------------------------------------------------------------
-
-  // --- متغيرات الحالة (State Variables) ---
-  /// لتخزين القائمة الكاملة للمعامل من قاعدة البيانات.
   List<LabModel> _allLabs = [];
-
-  /// لتخزين القائمة المصفاة التي يتم عرضها للمستخدم.
   List<LabModel> _filteredLabs = [];
-
-  /// لتتبع حالة التحميل.
   bool _isLoading = true;
-
-  /// متغير لتتبع عدد الأجهزة في كل معمل لتحسين الأداء.
   Map<String, int> _labDeviceCounts = {};
 
-  //------------------------------------------------------------------------------
-
-  // --- متحكمات البحث والتصفية ---
   final TextEditingController _searchController = TextEditingController();
   LabStatus? _selectedStatus;
   String? _selectedCollege;
   String? _selectedFloor;
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
+  // ===========================================================================
 
-  /// دالة initState: يتم استدعاؤها مرة واحدة عند إنشاء الويدجت.
   @override
   void initState() {
     super.initState();
-    // تعيين القيمة الافتراضية للفلاتر (null يعني "الكل").
     _selectedCollege = null;
     _selectedFloor = null;
     _selectedStatus = null;
-
-    _loadLabs(); // تحميل قائمة المعامل.
-    // إضافة مستمع لحقل البحث لتحديث القائمة تلقائيًا.
+    _loadLabs();
     _searchController.addListener(_filterLabs);
   }
 
-  //------------------------------------------------------------------------------
-
-  /// دالة dispose: يتم استدعاؤها عند إزالة الويدجت لتحرير الموارد.
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
+  // ===========================================================================
 
-  /// دالة غير متزامنة لتحميل بيانات المعامل وعدد الأجهزة المرتبطة بها.
-  Future<void> _loadLabs() async {
-    try {
-      setState(() => _isLoading = true);
-
-      // جلب البيانات من قاعدة البيانات.
-      final labs = await FirebaseDatabaseService.getLabs();
-      final devices = await FirebaseDatabaseService.getDevices();
-
-      // حساب عدد الأجهزة لكل معمل مرة واحدة لتحسين الأداء.
-      final labDeviceCounts = _calculateLabDeviceCounts(devices);
-
-      setState(() {
-        _allLabs = labs;
-        _labDeviceCounts = labDeviceCounts;
-        _isLoading = false;
-      });
-      _filterLabs(); // تطبيق الفلاتر بعد تحميل البيانات
-    } catch (e) {
-      _handleLoadError(e);
-    }
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة مساعدة لحساب عدد الأجهزة لكل معمل وتخزينها في خريطة.
-  Map<String, int> _calculateLabDeviceCounts(List<DeviceModel> devices) {
-    final labDeviceCounts = <String, int>{};
-    for (var device in devices) {
-      if (device.labId.isNotEmpty) {
-        labDeviceCounts[device.labId] =
-            (labDeviceCounts[device.labId] ?? 0) + 1;
-      }
-    }
-    return labDeviceCounts;
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة لمعالجة الأخطاء عند تحميل البيانات.
-  void _handleLoadError(dynamic error) {
-    setState(() => _isLoading = false);
-    UIHelpers.showSnackBar(
-        context: context,
-        message: 'خطأ في تحميل المعامل: $error',
-        type: SnackBarType.error);
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة التصفية المحورية التي يتم استدعاؤها عند أي تغيير في البحث أو الفلاتر.
-  void _filterLabs() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredLabs = _allLabs.where((lab) {
-        // شرط البحث النصي: يطابق رقم المعمل، الكلية، أو القسم.
-        final matchesSearch = lab.labNumber.toLowerCase().contains(query) ||
-            lab.college.toLowerCase().contains(query) ||
-            lab.department.toLowerCase().contains(query);
-
-        // شرط فلتر الكلية.
-        final matchesCollege =
-            _selectedCollege == null || lab.college == _selectedCollege;
-        // شرط فلتر الدور.
-        final matchesFloor =
-            _selectedFloor == null || lab.floorNumber == _selectedFloor;
-        // شرط فلتر الحالة.
-        final matchesStatus =
-            _selectedStatus == null || lab.status == _selectedStatus;
-
-        // إرجاع المعامل التي تحقق جميع الشروط.
-        return matchesSearch && matchesCollege && matchesFloor && matchesStatus;
-      }).toList();
-    });
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة لعرض ورقة سفلية (Bottom Sheet) تحتوي على خيارات التصفية.
-  void _showFilterBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, // للسماح للورقة بأخذ ارتفاع متغير.
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6, // الارتفاع الأولي.
-          minChildSize: 0.3, // أصغر ارتفاع.
-          maxChildSize: 0.9, // أكبر ارتفاع.
-          expand: false, // مهم لكي لا تتجاوز حدود الشاشة
-          builder: (context, scrollController) {
-            return FilterBottomSheet(
-              scrollController: scrollController,
-              initialSelectedCollege: _selectedCollege,
-              initialSelectedFloor: _selectedFloor,
-              initialSelectedStatus: _selectedStatus,
-              onApplyFilters: (college, floor, status) {
-                setState(() {
-                  _selectedCollege = college;
-                  _selectedFloor = floor;
-                  _selectedStatus = status;
-                });
-                _filterLabs(); // تطبيق الفلاتر الجديدة
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة للانتقال إلى شاشة تفاصيل المعمل.
-  void _navigateToLabDetails(LabModel lab) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => LabDetailsScreen(lab: lab)),
-      // استخدام .then() لتحديث القائمة تلقائيًا بعد العودة من شاشة التفاصيل.
-    ).then((_) => _loadLabs());
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة بناء الواجهة الرئيسية للشاشة.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -226,17 +84,127 @@ class _LabsListScreenState extends State<LabsListScreen> {
       ),
       body: Column(
         children: [
-          _buildSearchBar(theme), // بناء حقل البحث.
-          // جعل قائمة المعامل تمتد لملء المساحة المتبقية.
+          _buildSearchBar(theme),
           Expanded(child: _buildLabsList(theme)),
         ],
       ),
     );
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 4. منطق العمل الرئيسي (Core Business Logic)
+  // ===========================================================================
 
-  /// ويدجت مساعد لبناء حقل البحث.
+  /// *** [تم التحديث] *** دالة لتحميل المعامل وفرزها حسب الأحدث.
+  Future<void> _loadLabs() async {
+    try {
+      setState(() => _isLoading = true);
+      final labs = await FirebaseDatabaseService.getLabs();
+      final devices = await FirebaseDatabaseService.getDevices();
+      final labDeviceCounts = _calculateLabDeviceCounts(devices);
+
+      if (!mounted) return;
+
+      // --- [إضافة جديدة] --- فرز القائمة حسب تاريخ الإنشاء (الأحدث أولاً)
+      labs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      setState(() {
+        _allLabs = labs;
+        _labDeviceCounts = labDeviceCounts;
+        _isLoading = false;
+      });
+      _filterLabs();
+    } catch (e) {
+      _handleLoadError(e);
+    }
+  }
+
+  /// دالة التصفية المحورية التي يتم استدعاؤها عند أي تغيير في البحث أو الفلاتر.
+  void _filterLabs() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredLabs = _allLabs.where((lab) {
+        final matchesSearch = lab.labNumber.toLowerCase().contains(query) ||
+            lab.college.toLowerCase().contains(query) ||
+            lab.department.toLowerCase().contains(query);
+        final matchesCollege =
+            _selectedCollege == null || lab.college == _selectedCollege;
+        final matchesFloor =
+            _selectedFloor == null || lab.floorNumber == _selectedFloor;
+        final matchesStatus =
+            _selectedStatus == null || lab.status == _selectedStatus;
+        return matchesSearch && matchesCollege && matchesFloor && matchesStatus;
+      }).toList();
+    });
+  }
+
+  /// دالة لعرض ورقة سفلية (Bottom Sheet) تحتوي على خيارات التصفية.
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return FilterBottomSheet(
+              scrollController: scrollController,
+              initialSelectedCollege: _selectedCollege,
+              initialSelectedFloor: _selectedFloor,
+              initialSelectedStatus: _selectedStatus,
+              onApplyFilters: (college, floor, status) {
+                setState(() {
+                  _selectedCollege = college;
+                  _selectedFloor = floor;
+                  _selectedStatus = status;
+                });
+                _filterLabs();
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// دالة للانتقال إلى شاشة تفاصيل المعمل.
+  void _navigateToLabDetails(LabModel lab) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => LabDetailsScreen(lab: lab)),
+    ).then((_) => _loadLabs());
+  }
+
+  // ===========================================================================
+  // 5. الدوال المساعدة والويدجتات الفرعية (Helpers & Sub-Widgets)
+  // ===========================================================================
+
+  Map<String, int> _calculateLabDeviceCounts(List<DeviceModel> devices) {
+    final labDeviceCounts = <String, int>{};
+    for (var device in devices) {
+      if (device.labId.isNotEmpty) {
+        labDeviceCounts[device.labId] =
+            (labDeviceCounts[device.labId] ?? 0) + 1;
+      }
+    }
+    return labDeviceCounts;
+  }
+
+  void _handleLoadError(dynamic error) {
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    UIHelpers.showSnackBar(
+        context: context,
+        message: 'خطأ في تحميل المعامل: $error',
+        type: SnackBarType.error);
+  }
+
   Widget _buildSearchBar(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.all(_defaultPadding),
@@ -250,7 +218,6 @@ class _LabsListScreenState extends State<LabsListScreen> {
                   icon: const Icon(Icons.clear),
                   onPressed: () {
                     _searchController.clear();
-                    // _filterLabs() سيتم استدعاؤها تلقائيًا بواسطة المستمع.
                   },
                 )
               : null,
@@ -260,9 +227,6 @@ class _LabsListScreenState extends State<LabsListScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء قائمة المعامل، ويعمل كآلة حالة.
   Widget _buildLabsList(ThemeData theme) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -278,9 +242,6 @@ class _LabsListScreenState extends State<LabsListScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء واجهة المستخدم في حالة عدم وجود معامل.
   Widget _buildEmptyView(ThemeData theme) {
     return Center(
       child: Column(
@@ -301,9 +262,6 @@ class _LabsListScreenState extends State<LabsListScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء عنصر واحد (بطاقة) في قائمة المعامل.
   Widget _buildLabItem(ThemeData theme, LabModel lab) {
     final deviceCount = _labDeviceCounts[lab.id] ?? 0;
 
@@ -314,22 +272,19 @@ class _LabsListScreenState extends State<LabsListScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('معمل ${lab.labNumber}'),
-            _buildDeviceCountBadge(theme, deviceCount), // شارة عدد الأجهزة.
+            _buildDeviceCountBadge(theme, deviceCount),
           ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [Text(lab.college), Text(lab.department)],
         ),
-        trailing: _buildStatusIcon(lab.status), // أيقونة الحالة.
+        trailing: _buildStatusIcon(lab.status),
         onTap: () => _navigateToLabDetails(lab),
       ),
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء شارة منسقة لعرض عدد الأجهزة.
   Widget _buildDeviceCountBadge(ThemeData theme, int deviceCount) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -351,9 +306,6 @@ class _LabsListScreenState extends State<LabsListScreen> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// ويدجت مساعد لبناء أيقونة الحالة مع اللون المناسب.
   Widget _buildStatusIcon(LabStatus status) {
     IconData icon;
     Color color;
@@ -376,8 +328,9 @@ class _LabsListScreenState extends State<LabsListScreen> {
 }
 
 //------------------------------------------------------------------------------
+// ويدجت منفصل للـ Bottom Sheet
+//------------------------------------------------------------------------------
 
-/// ويدجت Bottom Sheet المخصصة للفلاتر.
 class FilterBottomSheet extends StatefulWidget {
   final ScrollController scrollController;
   final String? initialSelectedCollege;
@@ -398,16 +351,11 @@ class FilterBottomSheet extends StatefulWidget {
   State<FilterBottomSheet> createState() => _FilterBottomSheetState();
 }
 
-//------------------------------------------------------------------------------
-
-/// كلاس الحالة الخاص بـ FilterBottomSheet.
 class _FilterBottomSheetState extends State<FilterBottomSheet> {
-  // متغيرات حالة مؤقتة لتخزين اختيارات المستخدم داخل الـ Bottom Sheet.
   String? _tempSelectedCollege;
   String? _tempSelectedFloor;
   LabStatus? _tempSelectedStatus;
 
-  /// تهيئة الحالة المؤقتة بالقيم الحالية للفلاتر.
   @override
   void initState() {
     super.initState();
@@ -416,12 +364,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     _tempSelectedStatus = widget.initialSelectedStatus;
   }
 
-  /// دالة بناء واجهة المستخدم الخاصة بالـ Bottom Sheet.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // تجهيز قوائم الفلاتر مع إضافة خيار "الكل" (الذي يمثله 'null').
     final List<String?> colleges = [null, ...DeviceFormConstants.colleges];
     final List<String?> floors = [null, ...DeviceFormConstants.floors];
     final List<LabStatus?> statuses = [null, ...LabStatus.values];
@@ -446,12 +391,10 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-
               Expanded(
                 child: ListView(
                   controller: widget.scrollController,
                   children: [
-                    // فلتر الكلية
                     _buildFilterSection(
                       title: 'الكلية',
                       children: colleges.map((college) {
@@ -468,8 +411,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       }).toList(),
                     ),
                     const SizedBox(height: 10),
-
-                    // فلتر الدور
                     _buildFilterSection(
                       title: 'الدور',
                       children: floors.map((floor) {
@@ -486,8 +427,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       }).toList(),
                     ),
                     const SizedBox(height: 10),
-
-                    // فلتر الحالة
                     _buildFilterSection(
                       title: 'الحالة',
                       children: statuses.map((status) {
@@ -508,7 +447,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -535,7 +473,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   Expanded(
                     child: FilledButton(
                       onPressed: () {
-                        Navigator.pop(context); // إغلاق الورقة السفلية
+                        Navigator.pop(context);
                         widget.onApplyFilters(
                           _tempSelectedCollege,
                           _tempSelectedFloor,
@@ -552,7 +490,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10), // هامش سفلي
+              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -560,9 +498,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     );
   }
 
-  //------------------------------------------------------------------------------
-
-  /// دالة مساعدة لبناء قسم فلتر واحد (عنوان ومجموعة خيارات).
   Widget _buildFilterSection(
       {required String title, required List<Widget> children}) {
     return Column(
@@ -577,7 +512,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         ),
         const SizedBox(height: 8),
         ...children,
-        const Divider(), // فاصل بين الأقسام
+        const Divider(),
       ],
     );
   }
