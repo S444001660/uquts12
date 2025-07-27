@@ -26,12 +26,13 @@ class _ReportsScreenState extends State<ReportsScreen>
   Map<String, int> _devicesByTimePeriod = {};
   List<Map<String, dynamic>> _topEmployees = [];
   List<Map<String, dynamic>> _recentActivities = [];
-  String _searchQuery = '';
-  String _selectedRole = 'technician';
 
   // Controllers and filters
   late TabController _tabController;
-  String _selectedTimeFilter = 'month'; // 'week', 'month', 'year'
+  String _selectedTimeFilter = 'month';
+  final TextEditingController _employeeSearchController = TextEditingController();
+  String _selectedRoleFilter = 'all';
+
 
   // Pre-fetched data to avoid multiple reads
   List<QueryDocumentSnapshot>? _deviceDocs;
@@ -39,24 +40,27 @@ class _ReportsScreenState extends State<ReportsScreen>
   List<QueryDocumentSnapshot>? _userDocs;
 
   // ===========================================================================
-  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
   // ===========================================================================
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    // إضافة مستمع لتحديث الواجهة عند الكتابة في حقل البحث
+    _employeeSearchController.addListener(() => setState(() {}));
     _initializeScreen();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _employeeSearchController.dispose();
     super.dispose();
   }
 
   // ===========================================================================
-  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
   // ===========================================================================
 
   @override
@@ -107,10 +111,9 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   // ===========================================================================
-  // 4. منطق العمل الرئيسي (Core Business Logic) - (أساسي)
+  // 4. منطق العمل الرئيسي (Core Business Logic)
   // ===========================================================================
 
-  /// دالة لتهيئة الشاشة والتحقق من الصلاحيات.
   Future<void> _initializeScreen() async {
     final hasPermission =
         await PermissionsService.hasPermission('view_reports');
@@ -122,7 +125,6 @@ class _ReportsScreenState extends State<ReportsScreen>
     await _loadAllData();
   }
 
-  /// دالة لتحميل جميع البيانات الأولية من قاعدة البيانات.
   Future<void> _loadAllData() async {
     setState(() {
       _isLoading = true;
@@ -142,25 +144,9 @@ class _ReportsScreenState extends State<ReportsScreen>
         _labDocs = results[1].docs;
         _userDocs = results[2].docs;
       }
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      if (mounted) {
-        setState(() {
-          _topEmployees = snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return {
-              'id': doc.id,
-              ...data,
-            };
-          }).toList();
-        });
-      }
-
+      
       _processAllStats();
+
     } catch (e) {
       if (mounted) {
         setState(() => _error = 'خطأ في تحميل البيانات: $e');
@@ -172,18 +158,18 @@ class _ReportsScreenState extends State<ReportsScreen>
     }
   }
 
-  /// دالة لتشغيل جميع دوال معالجة الإحصائيات.
   void _processAllStats() {
     if (_deviceDocs == null || _labDocs == null || _userDocs == null) return;
     _processGeneralStats(_deviceDocs!, _labDocs!, _userDocs!);
     _processDevicesByCollege(_deviceDocs!);
     _processLabsByStatus(_labDocs!);
     _processDevicesByTime(_deviceDocs!);
-    _processRecentActivities(_deviceDocs!);
+    _processTopEmployees(_userDocs!);
+    _processRecentActivities(_deviceDocs!, _labDocs!);
   }
 
   // ===========================================================================
-  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets) - (يمكن فصلها)
+  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets)
   // ===========================================================================
 
   Widget _buildOverviewTab() {
@@ -324,37 +310,70 @@ class _ReportsScreenState extends State<ReportsScreen>
     );
   }
 
+  /// *** [تم التحديث] *** بناء تبويب أفضل الموظفين مع إضافة فلاتر.
   Widget _buildTopEmployeesTab() {
-    final topEmployees = List<Map<String, dynamic>>.from(_topEmployees)
-      ..sort((a, b) => (b['points'] ?? 0).compareTo(a['points'] ?? 0));
+    // استخدام الـ getter المفلتر بدلاً من القائمة الأصلية
+    final List<Map<String, dynamic>> displayedEmployees = _filteredEmployees;
 
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: topEmployees.length > 10 ? 10 : topEmployees.length,
-            itemBuilder: (context, index) {
-              final employee = topEmployees[index];
-              final rank = index + 1;
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getRankColor(rank),
-                    child: Text(
-                      '$rank',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  title: Text(employee['fullName'] ?? 'غير محدد'),
-                  subtitle: Text('${employee['points'] ?? 0} نقطة'),
-                  trailing: _getRankIcon(rank),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              TextField(
+                controller: _employeeSearchController,
+                decoration: InputDecoration(
+                  hintText: 'بحث بالاسم، البريد، أو الرقم الوظيفي...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-              );
-            },
-          );
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildRoleFilterChip('الكل', 'all'),
+                  const SizedBox(width: 8),
+                  _buildRoleFilterChip('فني', 'technician'),
+                  const SizedBox(width: 8),
+                  _buildRoleFilterChip('مشرف', 'supervisor'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: displayedEmployees.isEmpty
+              ? const Center(child: Text('لا يوجد موظفون يطابقون البحث.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: displayedEmployees.length,
+                  itemBuilder: (context, index) {
+                    final employee = displayedEmployees[index];
+                    final rank = index + 1;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: _getRankColor(rank),
+                          child: Text(
+                            '$rank',
+                            style: const TextStyle(
+                                color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Text(employee['fullName'] ?? 'غير محدد'),
+                        subtitle: Text('${employee['points'] ?? 0} نقطة'),
+                        trailing: _getRankIcon(rank),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 
   Widget _buildActivitiesTab() {
@@ -370,9 +389,9 @@ class _ReportsScreenState extends State<ReportsScreen>
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
-            leading: const CircleAvatar(
-              backgroundColor: Colors.blue,
-              child: Icon(Icons.add, color: Colors.white),
+            leading: CircleAvatar(
+              backgroundColor: activity['type'] == 'lab' ? Colors.green : Colors.blue,
+              child: Icon(activity['type'] == 'lab' ? Icons.science : Icons.computer, color: Colors.white),
             ),
             title: Text(activity['description'] ?? ''),
             subtitle: Text('الكلية: ${activity['college'] ?? ''}'),
@@ -384,7 +403,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   // ===========================================================================
-  // 6. دوال معالجة البيانات (Data Processing Functions) - (يمكن فصلها)
+  // 6. دوال معالجة البيانات (Data Processing Functions)
   // ===========================================================================
 
   void _processGeneralStats(List<QueryDocumentSnapshot> devices,
@@ -398,23 +417,11 @@ class _ReportsScreenState extends State<ReportsScreen>
       return createdAt != null && createdAt.isAfter(startOfMonth);
     }).length;
 
-    final activeLabs = labs.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      return data['status'] == 'openWithDevices';
-    }).length;
-
-    final maintenanceDevices = devices.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      return data['needsMaintenance'] == true;
-    }).length;
-
     _generalStats = {
       'totalDevices': devices.length,
       'totalLabs': labs.length,
       'totalEmployees': users.length,
       'devicesThisMonth': devicesThisMonth,
-      'activeLabs': activeLabs,
-      'maintenanceDevices': maintenanceDevices,
       'deviceGrowthRate': _calculateGrowthRate(devices),
       'averageDevicesPerLab': labs.isNotEmpty
           ? (devices.length / labs.length).toStringAsFixed(1)
@@ -428,17 +435,17 @@ class _ReportsScreenState extends State<ReportsScreen>
     final thisMonth = DateTime(now.year, now.month, 1);
 
     final lastMonthCount = devices.where((doc) {
-      final createdAt =
-          (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+      final data = doc.data() as Map<String, dynamic>;
+      final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
       return createdAt != null &&
-          createdAt.toDate().isAfter(lastMonth) &&
-          createdAt.toDate().isBefore(thisMonth);
+          createdAt.isAfter(lastMonth) &&
+          createdAt.isBefore(thisMonth);
     }).length;
 
     final thisMonthCount = devices.where((doc) {
-      final createdAt =
-          (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      return createdAt != null && createdAt.toDate().isAfter(thisMonth);
+      final data = doc.data() as Map<String, dynamic>;
+      final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+      return createdAt != null && createdAt.isAfter(thisMonth);
     }).length;
 
     if (lastMonthCount == 0) return thisMonthCount > 0 ? 100.0 : 0.0;
@@ -448,9 +455,8 @@ class _ReportsScreenState extends State<ReportsScreen>
   void _processDevicesByCollege(List<QueryDocumentSnapshot> devices) {
     final Map<String, int> collegeCount = {};
     for (final doc in devices) {
-      final college =
-          (doc.data() as Map<String, dynamic>)['college'] as String? ??
-              'غير محدد';
+      final data = doc.data() as Map<String, dynamic>;
+      final college = data['college'] as String? ?? 'غير محدد';
       collegeCount[college] = (collegeCount[college] ?? 0) + 1;
     }
     _devicesByCollege = collegeCount;
@@ -463,8 +469,8 @@ class _ReportsScreenState extends State<ReportsScreen>
       'مغلق': 0,
     };
     for (final doc in labs) {
-      final status =
-          (doc.data() as Map<String, dynamic>)['status'] as String? ?? 'closed';
+      final data = doc.data() as Map<String, dynamic>;
+      final status = data['status'] as String? ?? 'closed';
       switch (status) {
         case 'openWithDevices':
           statusCount['مفتوح مع أجهزة'] =
@@ -491,11 +497,11 @@ class _ReportsScreenState extends State<ReportsScreen>
       timeData = {for (var day in daysOfWeek.reversed) day: 0};
 
       for (final doc in devices) {
-        final createdAt =
-            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+        final data = doc.data() as Map<String, dynamic>;
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
         if (createdAt != null &&
-            now.difference(createdAt.toDate()).inDays < 7) {
-          final dayName = _getDayName(createdAt.toDate().weekday);
+            now.difference(createdAt).inDays < 7) {
+          final dayName = _getDayName(createdAt.weekday);
           timeData[dayName] = (timeData[dayName] ?? 0) + 1;
         }
       }
@@ -505,11 +511,11 @@ class _ReportsScreenState extends State<ReportsScreen>
       timeData = {for (var month in monthsOfYear.reversed) month: 0};
 
       for (final doc in devices) {
-        final createdAt =
-            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+        final data = doc.data() as Map<String, dynamic>;
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
         if (createdAt != null &&
-            now.difference(createdAt.toDate()).inDays < 365) {
-          final monthName = _getMonthName(createdAt.toDate().month);
+            now.difference(createdAt).inDays < 365) {
+          final monthName = _getMonthName(createdAt.month);
           timeData[monthName] = (timeData[monthName] ?? 0) + 1;
         }
       }
@@ -518,38 +524,57 @@ class _ReportsScreenState extends State<ReportsScreen>
       timeData = {for (var i = 4; i >= 0; i--) (now.year - i).toString(): 0};
 
       for (final doc in devices) {
-        final createdAt =
-            (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-        if (createdAt != null && now.year - createdAt.toDate().year < 5) {
-          final year = createdAt.toDate().year.toString();
+        final data = doc.data() as Map<String, dynamic>;
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        if (createdAt != null && now.year - createdAt.year < 5) {
+          final year = createdAt.year.toString();
           timeData[year] = (timeData[year] ?? 0) + 1;
         }
       }
     }
     _devicesByTimePeriod = timeData;
   }
+  
+  void _processTopEmployees(List<QueryDocumentSnapshot> users) {
+    final employeeData = users.map((doc) => doc.data() as Map<String, dynamic>).toList();
+    employeeData.sort((a, b) => (b['points'] ?? 0).compareTo(a['points'] ?? 0));
+    _topEmployees = employeeData;
+  }
 
-  void _processRecentActivities(List<QueryDocumentSnapshot> devices) {
-    devices.sort((a, b) {
-      final dateA =
-          (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      final dateB =
-          (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-      return (dateB ?? Timestamp(0, 0)).compareTo(dateA ?? Timestamp(0, 0));
-    });
+  void _processRecentActivities(List<QueryDocumentSnapshot> devices, List<QueryDocumentSnapshot> labs) {
+    List<Map<String, dynamic>> activities = [];
 
-    _recentActivities = devices.take(10).map((doc) {
+    for (var doc in devices) {
       final data = doc.data() as Map<String, dynamic>;
-      return {
+      activities.add({
         'description': 'تمت إضافة جهاز "${data['name'] ?? 'غير معروف'}"',
         'college': data['college'] ?? 'غير محدد',
         'createdAt': data['createdAt'],
-      };
-    }).toList();
+        'type': 'device',
+      });
+    }
+
+    for (var doc in labs) {
+      final data = doc.data() as Map<String, dynamic>;
+      activities.add({
+        'description': 'تمت إضافة معمل "${data['labNumber'] ?? 'غير معروف'}"',
+        'college': data['college'] ?? 'غير محدد',
+        'createdAt': data['createdAt'],
+        'type': 'lab',
+      });
+    }
+
+    activities.sort((a, b) {
+      final dateA = (a['createdAt'] as Timestamp?) ?? Timestamp(0, 0);
+      final dateB = (b['createdAt'] as Timestamp?) ?? Timestamp(0, 0);
+      return dateB.compareTo(dateA);
+    });
+
+    _recentActivities = activities.take(10).toList();
   }
 
   // ===========================================================================
-  // 7. دوال مساعدة متنوعة (Misc Helpers) - (يمكن فصلها)
+  // 7. دوال مساعدة متنوعة (Misc Helpers)
   // ===========================================================================
 
   void _showErrorSnackBar(String message) {
@@ -564,14 +589,14 @@ class _ReportsScreenState extends State<ReportsScreen>
       final fullName = employee['fullName']?.toString().toLowerCase() ?? '';
       final email = employee['email']?.toString().toLowerCase() ?? '';
       final employeeId = employee['employeeId']?.toString().toLowerCase() ?? '';
-      final query = _searchQuery.toLowerCase();
+      final query = _employeeSearchController.text.toLowerCase();
 
       final matchesSearch = fullName.contains(query) ||
           email.contains(query) ||
           employeeId.contains(query);
 
       final matchesRole =
-          _selectedRole == 'all' || employee['role'] == _selectedRole;
+          _selectedRoleFilter == 'all' || employee['role'] == _selectedRoleFilter;
 
       return matchesSearch && matchesRole;
     }).toList();
@@ -619,7 +644,26 @@ class _ReportsScreenState extends State<ReportsScreen>
           });
         }
       },
-      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+      selectedColor: Theme.of(context).colorScheme.primary..withAlpha((255 * 0.2).round())
+,
+      checkmarkColor: Theme.of(context).colorScheme.primary,
+    );
+  }
+  
+  Widget _buildRoleFilterChip(String label, String value) {
+    final isSelected = _selectedRoleFilter == value;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) {
+        if (selected) {
+          setState(() {
+            _selectedRoleFilter = value;
+          });
+        }
+      },
+      selectedColor: Theme.of(context).colorScheme.primary..withAlpha((255 * 0.2).round())
+,
       checkmarkColor: Theme.of(context).colorScheme.primary,
     );
   }
@@ -677,7 +721,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           ),
         ),
         titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
+          leftTitles: const AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 40,
@@ -841,9 +885,9 @@ class _ReportsScreenState extends State<ReportsScreen>
         borderData: FlBorderData(show: true),
         barGroups: barGroups,
         maxY: (_labsByStatus.values.isNotEmpty
-                    ? _labsByStatus.values.reduce((a, b) => a > b ? a : b)
-                    : 0)
-                .toDouble() +
+                ? _labsByStatus.values.reduce((a, b) => a > b ? a : b)
+                : 0)
+            .toDouble() +
             2,
       ),
     );

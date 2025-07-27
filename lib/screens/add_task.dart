@@ -298,7 +298,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                               });
                             },
                           );
-                        }).toList(),
+                        }),
                       ],
                     ),
                   ),
@@ -320,7 +320,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withAlpha(127), // 127 تعادل شفافية 0.5
               child: const Center(
                 child: CircularProgressIndicator(),
               ),

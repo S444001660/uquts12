@@ -74,8 +74,10 @@ class _LoginScreenState extends State<LoginScreen> {
         debugPrint("✅ تم تسجيل الدخول بنجاح.");
         if (mounted) {
           final userRoleString = userData['role'] as String? ?? 'guest';
-          UIHelpers.showSuccessSnackBar(context,
-              "مرحباً بك: ${userRoleFromString(userRoleString).displayName}");
+          if (mounted) {
+            UIHelpers.showSuccessSnackBar(context,
+                "مرحباً بك: ${userRoleFromString(userRoleString).displayName}");
+          }
         }
       } else {
         // هذا الجزء يعالج حالة عدم وجود مستند للمستخدم
@@ -95,8 +97,10 @@ class _LoginScreenState extends State<LoginScreen> {
           await userDocRef.set(newAdminUser.toMap());
           debugPrint("✅ تم إنشاء مستند المدير الأول في Firestore تلقائيًا.");
           if (mounted) {
-            UIHelpers.showSuccessSnackBar(
-                context, "تم تسجيل الدخول كمدير النظام.");
+            if (mounted) {
+              UIHelpers.showSuccessSnackBar(
+                  context, "تم تسجيل الدخول كمدير النظام.");
+            }
           }
         } else {
           await FirebaseAuth.instance.signOut();
@@ -113,8 +117,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } on FirebaseAuthException catch (e) {
       _handleFirebaseAuthError(e);
     } catch (e) {
-      UIHelpers.showErrorSnackBar(
-          context, "حدث خطأ غير متوقع: ${e.toString()}");
+      if (mounted) {
+        UIHelpers.showErrorSnackBar(
+            context, "حدث خطأ غير متوقع: ${e.toString()}");
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

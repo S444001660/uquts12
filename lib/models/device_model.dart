@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:equatable/equatable.dart'; // <-- 1. استيراد الحزمة الجديدة
+import 'package:equatable/equatable.dart';
 
 //------------------------------------------------------------------------------
 

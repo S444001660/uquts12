@@ -194,8 +194,12 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     } on FirebaseAuthException catch (e) {
       _handleFirebaseAuthError(e);
     } catch (e) {
-      UIHelpers.showErrorSnackBar(
-          context, 'حدث خطأ غير متوقع: ${e.toString()}');
+      if (mounted) {
+        UIHelpers.showErrorSnackBar(
+          context,
+          'حدث خطأ غير متوقع: ${e.toString()}',
+        );
+      }
     } finally {
       if (secondaryApp != null) {
         await secondaryApp.delete();

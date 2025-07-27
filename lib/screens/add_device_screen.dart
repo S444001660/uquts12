@@ -386,11 +386,12 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         });
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         UIHelpers.showSnackBar(
             context: context,
             message: 'خطأ في تحميل تفاصيل المعمل: $e',
             type: SnackBarType.error);
+      }
     }
   }
 

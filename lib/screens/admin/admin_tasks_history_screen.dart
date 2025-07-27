@@ -94,18 +94,19 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
     }
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('tasks')
-          .where('createdBy', isEqualTo: adminId)
-          .orderBy('createdAt', descending: true)
-          .get();
+      // *** [تم التصحيح] *** تحديد نوع البيانات للاستعلام
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await FirebaseFirestore.instance
+              .collection('tasks')
+              .where('createdBy', isEqualTo: adminId)
+              .orderBy('createdAt', descending: true)
+              .get();
 
       if (mounted) {
         setState(() {
-          _allTasks = snapshot.docs
-              .map((doc) =>
-                  {'id': doc.id, ...doc.data() as Map<String, dynamic>})
-              .toList();
+          _allTasks = snapshot.docs.map((doc) =>
+              // *** [تم التصحيح] *** إزالة التحويل غير الضروري
+              {'id': doc.id, ...doc.data()}).toList();
           _isLoading = false;
         });
         _filterTasks();
@@ -120,7 +121,6 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
     }
   }
 
-  /// *** [تم التصحيح النهائي] *** دالة لتصفية المهام بطريقة أكثر قوة.
   void _filterTasks() {
     final query = _searchController.text.toLowerCase();
     setState(() {
@@ -243,24 +243,19 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
   // 6. الدوال المساعدة (Helper Functions)
   // ===========================================================================
 
-  /// *** [جديد ومهم] *** دالة موحدة لتحديد ما إذا كانت المهمة مكتملة.
   bool _isTaskConsideredComplete(Map<String, dynamic> task) {
-    // الحالة 1: التحقق من علامة الإكمال الصريحة
     if (task['isCompleted'] == true) {
       return true;
     }
-    // الحالة 2: التحقق من وجود تاريخ للإكمال
     if (task['completedAt'] != null) {
       return true;
     }
-    // الحالة 3 (الأهم): التحقق من نسبة الإنجاز
     final percentage =
         (task['completionPercentage'] as num?)?.toDouble() ?? 0.0;
     if (percentage >= 100.0) {
       return true;
     }
 
-    // إذا لم يتحقق أي من الشروط، فالمهمة غير مكتملة
     return false;
   }
 }

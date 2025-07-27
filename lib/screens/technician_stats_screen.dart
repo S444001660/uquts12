@@ -193,7 +193,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
       children: [
         CircleAvatar(
           radius: 35,
-          backgroundColor: theme.primaryColor.withOpacity(0.2),
+          backgroundColor: theme.colorScheme.primary.withAlpha(51),
           child: Text(
             widget.user.fullName.isNotEmpty ? widget.user.fullName[0] : 'U',
             style: TextStyle(
@@ -282,7 +282,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withAlpha(230),
             spreadRadius: 1,
             blurRadius: 10,
           ),
@@ -295,7 +295,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: color.withOpacity(0.15),
+            backgroundColor: color.withAlpha(38),
             child: Icon(icon, color: color),
           ),
           Column(
@@ -337,7 +337,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withAlpha(25),
                 spreadRadius: 1,
                 blurRadius: 10,
               ),
@@ -399,7 +399,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
                 show: true,
                 drawVerticalLine: false,
                 getDrawingHorizontalLine: (value) => FlLine(
-                  color: Colors.grey.withOpacity(0.2),
+                  color: Colors.grey.withAlpha(51),
                   strokeWidth: 1,
                 ),
               ),

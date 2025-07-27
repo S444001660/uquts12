@@ -1,15 +1,15 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uquts1/models/user_account_model.dart';
+import 'package:uquts1/models/user_role_model.dart';
 import 'package:uquts1/screens/admin/admin_tasks_history_screen.dart';
 import 'package:uquts1/screens/admin/employee_management_screen.dart';
 import 'package:uquts1/screens/admin/reports_screen.dart';
 import 'package:uquts1/screens/technician_stats_screen.dart';
 import 'package:uquts1/screens/user_tasks_screen.dart';
 import '../auth/auth_wrapper.dart';
-import 'admin/create_user_screen.dart';
+import 'admin/create_user_screen.dart'; // <-- أصبح هذا الاستيراد مستخدمًا الآن
 import '../services/permissions_service.dart';
-import 'package:uquts1/models/user_role_model.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -29,7 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   UserAccountModel? _currentUser;
 
   // ===========================================================================
-  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
   // ===========================================================================
 
   @override
@@ -39,138 +39,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ===========================================================================
-  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
   // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الإعدادات'),
+        title: const Text('المزيد'),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // قسم إدارة النظام (يظهر للمدير والمشرف)
-          ...(_currentUserRole == UserRole.admin ||
-                  _currentUserRole == UserRole.supervisor
-              ? [
-                  Card(
-                    elevation: 4,
-                    child: ListTile(
-                      leading: Icon(Icons.admin_panel_settings,
-                          color: theme.colorScheme.primary),
-                      title: const Text('إدارة الموظفين'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const EmployeeManagementScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    elevation: 4,
-                    child: ListTile(
-                      leading: Icon(Icons.analytics,
-                          color: theme.colorScheme.primary),
-                      title: const Text('التقارير'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ReportsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    elevation: 4,
-                    child: ListTile(
-                      leading:
-                          Icon(Icons.history, color: theme.colorScheme.primary),
-                      title: const Text('سجل المهام'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const AdminTasksHistoryScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ]
-              : []),
-
-          // قسم الفني (يظهر للفني فقط)
-          ...(_currentUserRole == UserRole.technician
-              ? [
-                  Card(
-                    elevation: 4,
-                    child: ListTile(
-                      leading: Icon(Icons.task_alt,
-                          color: theme.colorScheme.primary),
-                      title: const Text('مهامي'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const UserTasksScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    elevation: 4,
-                    child: ListTile(
-                      leading: Icon(Icons.insights,
-                          color: theme.colorScheme.primary),
-                      title: const Text('إحصائياتي'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                TechnicianStatsScreen(user: _currentUser!),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ]
-              : []),
-
-          const SizedBox(height: 16),
-
-          // قسم الحساب (يظهر للجميع)
-          Card(
-            elevation: 4,
-            child: ListTile(
-              leading: const Icon(Icons.logout, color: Colors.redAccent),
-              title: const Text('تسجيل الخروج'),
-              onTap: _signOut,
-            ),
-          ),
-        ],
-      ),
+      body: _buildBody(), // بناء المحتوى بناءً على الحالة
     );
   }
 
   // ===========================================================================
-  // 4. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // 4. منطق العمل الرئيسي (Core Business Logic)
   // ===========================================================================
 
   /// دالة لتحميل بيانات المستخدم وصلاحياته.
@@ -200,7 +84,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// دالة لتسجيل الخروج والعودة إلى شاشة المصادقة.
   Future<void> _signOut() async {
     await FirebaseAuth.instance.signOut();
-    // مسح الذاكرة المؤقتة للصلاحيات عند تسجيل الخروج
     PermissionsService.clearCache();
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
@@ -208,5 +91,171 @@ class _SettingsScreenState extends State<SettingsScreen> {
         (Route<dynamic> route) => false,
       );
     }
+  }
+
+  // ===========================================================================
+  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets)
+  // ===========================================================================
+
+  /// ويدجت لبناء محتوى الشاشة بناءً على الحالة (تحميل، خطأ، نجاح).
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadUserAndData,
+              child: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ),
+      );
+    }
+    return _buildSettingsList();
+  }
+
+  /// ويدجت لبناء قائمة الإعدادات بعد تحميل البيانات بنجاح.
+  Widget _buildSettingsList() {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        ..._buildAdminOptions(theme),
+        ..._buildTechnicianOptions(theme),
+        ..._buildAccountOptions(theme),
+      ],
+    );
+  }
+
+  /// بناء خيارات المدير والمشرف.
+  List<Widget> _buildAdminOptions(ThemeData theme) {
+    if (_currentUserRole == UserRole.admin ||
+        _currentUserRole == UserRole.supervisor) {
+      return [
+        _buildSectionTitle('إدارة النظام'),
+        _buildSettingsCard(
+          icon: Icons.person_add_alt_1,
+          title: 'إنشاء مستخدم جديد',
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const CreateUserScreen())),
+          theme: theme,
+        ),
+        _buildSettingsCard(
+          icon: Icons.admin_panel_settings,
+          title: 'إدارة الموظفين',
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const EmployeeManagementScreen())),
+          theme: theme,
+        ),
+        _buildSettingsCard(
+          icon: Icons.analytics,
+          title: 'التقارير',
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (context) => const ReportsScreen())),
+          theme: theme,
+        ),
+        _buildSettingsCard(
+          icon: Icons.history,
+          title: 'سجل المهام',
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const AdminTasksHistoryScreen())),
+          theme: theme,
+        ),
+      ];
+    }
+    return [];
+  }
+
+  /// بناء خيارات الفني.
+  List<Widget> _buildTechnicianOptions(ThemeData theme) {
+    if (_currentUserRole == UserRole.technician) {
+      return [
+        _buildSectionTitle('أدوات الفني'),
+        _buildSettingsCard(
+          icon: Icons.task_alt,
+          title: 'مهامي',
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (context) => const UserTasksScreen())),
+          theme: theme,
+        ),
+        _buildSettingsCard(
+          icon: Icons.insights,
+          title: 'إحصائياتي',
+          onTap: () {
+            if (_currentUser != null) {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          TechnicianStatsScreen(user: _currentUser!)));
+            }
+          },
+          theme: theme,
+        ),
+      ];
+    }
+    return [];
+  }
+
+  /// بناء خيارات الحساب العامة.
+  List<Widget> _buildAccountOptions(ThemeData theme) {
+    return [
+      _buildSectionTitle('الحساب'),
+      _buildSettingsCard(
+        icon: Icons.logout,
+        title: 'تسجيل الخروج',
+        onTap: _signOut,
+        theme: theme,
+        color: Colors.redAccent,
+      ),
+    ];
+  }
+
+  /// ويدجت مساعد لبناء عنوان لكل قسم.
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0, right: 8.0),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+    );
+  }
+
+  /// ويدجت مساعد لبناء بطاقة إعدادات منسقة.
+  Widget _buildSettingsCard({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    required ThemeData theme,
+    Color? color,
+  }) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: Icon(icon, color: color ?? theme.colorScheme.primary),
+        title: Text(title),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 }

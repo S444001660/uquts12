@@ -1,28 +1,23 @@
 // استيراد المكتبات الضرورية
-import 'dart:io'; // للتعامل مع الملفات (مثل صورة المعمل).
-import 'package:flutter/material.dart'; // مكتبة فلاتر الأساسية لبناء واجهة المستخدم.
-import 'package:uuid/uuid.dart'; // لتوليد معرفات فريدة (IDs).
-import 'package:image_picker/image_picker.dart'; // لاختيار الصور من الكاميرا أو المعرض.
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// --- ملاحظة: تأكد من أن هذه الاستيرادات تتوافق مع هيكل مشروعك ---
-import '../models/lab_model.dart'; // استيراد نموذج بيانات المعمل.
-import '../services/firebase_database_service.dart'; // خدمات قاعدة البيانات
-import '../utils/ui_helpers.dart'; // دوال مساعدة لعرض عناصر واجهة المستخدم (مثل SnackBar).
-import '../utils/validation_utils.dart'; // دوال للتحقق من صحة مدخلات الفورم.
-import '../utils/image_utils.dart'; // دوال مساعدة للتعامل مع الصور.
-import '../utils/device_form_constants.dart'; // ثوابت وقوائم مستخدمة في الفورم.
-import 'add_device_screen.dart'; // شاشة إضافة/تعديل جهاز.
+// --- استيراد الملفات الأخرى اللازمة ---
+import '../models/lab_model.dart';
+import '../services/firebase_database_service.dart';
+import '../utils/ui_helpers.dart';
+import '../utils/validation_utils.dart';
+import '../utils/image_utils.dart';
+import '../utils/device_form_constants.dart';
+import 'add_device_screen.dart';
 
 // -----------------------------------------------------------------
 
-/// ويدجت شاشة إضافة أو تعديل معمل، وهي StatefulWidget لأن حالتها تتغير.
 class AddLabScreen extends StatefulWidget {
-  /// متغير لتمرير بيانات معمل موجود مسبقًا في حال التعديل.
-  /// يكون 'null' عند إضافة معمل جديد.
   final LabModel? lab;
-
   const AddLabScreen({super.key, this.lab});
 
   @override
@@ -31,26 +26,18 @@ class AddLabScreen extends StatefulWidget {
 
 //------------------------------------------------------------------------------
 
-/// كلاس الحالة (State) الخاص بـ AddLabScreen.
 class _AddLabScreenState extends State<AddLabScreen> {
-  // --- ثوابت لتنظيم الكود ---
-  // تستخدم لتوحيد المسافات وأبعاد العناصر في الواجهة.
+  // ===========================================================================
+  // 1. تعريفات الحالة والمتحكمات (State & Controllers)
+  // ===========================================================================
+
   static const double _defaultSpacing = 16.0;
-  static const int _maxImageSizeBytes = 5 * 1024 * 1024; // 5 MB
+  static const int _maxImageSizeBytes = 5 * 1024 * 1024;
 
-  //------------------------------------------------------------------------------
-
-  // --- مفاتيح ومتحكمات الفورم ---
-  // مفتاح للتحكم في حالة الفورم والتحقق من صحته.
   final _formKey = GlobalKey<FormState>();
-  // متحكمات لربط حقول النص بالـ State.
   late final TextEditingController _labNumberController;
   late final TextEditingController _notesController;
 
-  //------------------------------------------------------------------------------
-
-  // --- متغيرات الحالة (State) ---
-  // لتخزين القيم التي يختارها المستخدم أو التي تتغير في الواجهة.
   String? _selectedCollege;
   String? _selectedDepartment;
   String? _selectedFloor;
@@ -60,22 +47,18 @@ class _AddLabScreenState extends State<AddLabScreen> {
   File? _capturedImage;
   String? _existingImageUrl;
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
+  // ===========================================================================
 
-  /// دالة تُستدعى مرة واحدة عند بناء الويدجت لأول مرة.
-  /// تستخدم لتهيئة المتحكمات وتحميل البيانات الأولية.
   @override
   void initState() {
     super.initState();
-    // تهيئة المتحكمات هنا وتعبئتها بالبيانات الموجودة في حالة التعديل.
     _labNumberController = TextEditingController(text: widget.lab?.labNumber);
     _notesController = TextEditingController(text: widget.lab?.notes);
     _loadExistingLabData();
   }
 
-  //------------------------------------------------------------------------------
-
-  /// دالة تُستدعى عند إزالة الويدجت، لتحرير الموارد ومنع تسرب الذاكرة.
   @override
   void dispose() {
     _labNumberController.dispose();
@@ -83,78 +66,17 @@ class _AddLabScreenState extends State<AddLabScreen> {
     super.dispose();
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 3. منطق العمل الرئيسي (Core Business Logic)
+  // ===========================================================================
 
-  /// دالة لملء متغيرات الحالة ببيانات معمل موجود مسبقًا (في وضع التعديل).
-  void _loadExistingLabData() {
-    final lab = widget.lab;
-    if (lab == null) return; // إذا كنا في وضع الإضافة، لا تفعل شيئًا.
-
-    // تعبئة متغيرات الحالة بالبيانات القادمة من كائن المعمل.
-    _selectedFloor = lab.floorNumber;
-    _labStatus = lab.status;
-    _selectedCollege = lab.college;
-    // التحقق من أن القسم لا يزال موجودًا في القائمة المحدثة قبل تحديده.
-    if (DeviceFormConstants.departments[lab.college]
-            ?.contains(lab.department) ??
-        false) {
-      _selectedDepartment = lab.department;
-    }
-    _selectedType = lab.type;
-    _existingImageUrl = lab.imagePath;
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة غير متزامنة لالتقاط صورة باستخدام الكاميرا مع التحقق من حجمها.
-  Future<void> _pickImage() async {
-    try {
-      final pickedImage = await ImageUtils.pickImage(
-        context: context,
-        source: ImageSource.camera,
-        maxSizeInBytes: _maxImageSizeBytes,
-      );
-
-      if (pickedImage != null) {
-        setState(() {
-          _capturedImage = pickedImage; // تخزين الصورة الملتقطة حديثًا.
-          _existingImageUrl = null; // حذف مرجع الصورة القديمة.
-        });
-      }
-    } catch (e) {
-      // عرض رسالة خطأ في حالة فشل التقاط الصورة أو تجاوز الحجم.
-      if (mounted) {
-        UIHelpers.showSnackBar(
-          context: context,
-          message: e is Exception
-              ? e.toString().replaceFirst('Exception: ', '')
-              : 'خطأ في اختيار الصورة',
-          type: SnackBarType.error,
-        );
-      }
-    }
-  }
-
-  Future<bool> _isLabNumberExists(String labNumber) async {
-    final isEditing = widget.lab != null;
-    if (isEditing && labNumber == widget.lab!.labNumber) {
-      return false; // لا تتحقق إذا لم يتغير الرقم في وضع التعديل
-    }
-    return await FirebaseDatabaseService.isLabNumberExists(labNumber,
-        excludeId: isEditing ? widget.lab!.id : null);
-  }
-
-  //------------------------------------------------------------------------------
-
-  /// دالة الحفظ الأساسية التي تحتوي على منطق التحقق والحفظ، لإعادة استخدامها.
   Future<LabModel?> _performSave() async {
     final isFormValid = _formKey.currentState?.validate() ?? false;
     if (!isFormValid) {
       UIHelpers.showSnackBar(
-        context: context,
-        message: 'يرجى التحقق من صحة البيانات',
-        type: SnackBarType.error,
-      );
+          context: context,
+          message: 'يرجى التحقق من صحة البيانات',
+          type: SnackBarType.error);
       return null;
     }
 
@@ -172,16 +94,16 @@ class _AddLabScreenState extends State<AddLabScreen> {
     setState(() => _isLoading = true);
 
     final labNumber = _labNumberController.text.trim();
+    final isEditing = widget.lab != null;
 
     try {
       final exists = await _isLabNumberExists(labNumber);
       if (exists) {
         if (mounted) {
           UIHelpers.showSnackBar(
-            context: context,
-            message: 'رقم المعمل موجود مسبقًا، يرجى اختيار رقم مختلف',
-            type: SnackBarType.error,
-          );
+              context: context,
+              message: 'رقم المعمل موجود مسبقًا، يرجى اختيار رقم مختلف',
+              type: SnackBarType.error);
         }
         return null;
       }
@@ -213,20 +135,20 @@ class _AddLabScreenState extends State<AddLabScreen> {
 
       final newLab = LabModel(
         id: labId,
-        labNumber: _labNumberController.text.trim(),
+        labNumber: labNumber,
         college: _selectedCollege!,
         department: _selectedDepartment!,
         floorNumber: _selectedFloor!,
         type: _selectedType!,
         status: _labStatus,
         notes: _notesController.text.trim(),
-        locationUrl: widget.lab?.locationUrl,
         imagePath: finalImagePath,
         createdAt: widget.lab?.createdAt ?? now,
         updatedAt: now,
         deviceIds: widget.lab?.deviceIds ?? [],
         createdBy: isNewLab ? currentUser?.uid : widget.lab?.createdBy,
         createdByName: isNewLab ? currentUserName : widget.lab?.createdByName,
+        locationUrl: widget.lab?.locationUrl,
       );
 
       await FirebaseDatabaseService.addOrUpdateLab(newLab);
@@ -246,9 +168,6 @@ class _AddLabScreenState extends State<AddLabScreen> {
     }
   }
 
-  //------------------------------------------------------------------------------
-
-  /// دالة مرتبطة بزر الحفظ العادي، تحفظ البيانات ثم تعود للشاشة السابقة.
   Future<void> _saveLabAndPop() async {
     final newLab = await _performSave();
     if (newLab != null && mounted) {
@@ -260,9 +179,6 @@ class _AddLabScreenState extends State<AddLabScreen> {
     }
   }
 
-  //------------------------------------------------------------------------------
-
-  /// دالة مرتبطة بزر "حفظ وإضافة جهاز"، تحفظ المعمل ثم تنتقل مباشرة لشاشة إضافة جهاز.
   Future<void> _saveLabAndAddDevice() async {
     final newLab = await _performSave();
     if (newLab != null && mounted) {
@@ -280,17 +196,20 @@ class _AddLabScreenState extends State<AddLabScreen> {
     }
   }
 
-  //------------------------------------------------------------------------------
+  // ===========================================================================
+  // 4. دالة بناء واجهة المستخدم (UI Build Method)
+  // ===========================================================================
 
-  /// الدالة الأساسية لبناء واجهة المستخدم (UI) للشاشة بأكملها.
   @override
   Widget build(BuildContext context) {
+    // يتم تعريف المتغير هنا لتحديد ما إذا كانت الشاشة في وضع التعديل أم الإضافة
     final isEditing = widget.lab != null;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
+          // <-- تم الاستفادة من المتغير هنا لتحديد عنوان الصفحة
           title: Text(isEditing ? 'تعديل معمل' : 'إضافة معمل'),
           actions: [
             if (_capturedImage != null || _existingImageUrl != null)
@@ -379,6 +298,7 @@ class _AddLabScreenState extends State<AddLabScreen> {
                     ),
                     const SizedBox(height: 42),
                     _ActionButtons(
+                      // <-- تم الاستفادة من المتغير هنا لتمريره إلى ويدجت الأزرار
                       isEditing: isEditing,
                       labStatus: _labStatus,
                       onSave: _saveLabAndPop,
@@ -399,11 +319,70 @@ class _AddLabScreenState extends State<AddLabScreen> {
       ),
     );
   }
+
+  // ===========================================================================
+  // 5. الدوال المساعدة (Helper Functions)
+  // ===========================================================================
+
+  void _loadExistingLabData() {
+    final lab = widget.lab;
+    if (lab == null) return;
+
+    setState(() {
+      _selectedFloor = lab.floorNumber;
+      _labStatus = lab.status;
+      _selectedCollege = lab.college;
+      if (DeviceFormConstants.departments[lab.college]
+              ?.contains(lab.department) ??
+          false) {
+        _selectedDepartment = lab.department;
+      }
+      _selectedType = lab.type;
+      _existingImageUrl = lab.imagePath;
+    });
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final pickedImage = await ImageUtils.pickImage(
+        context: context,
+        source: ImageSource.camera,
+        maxSizeInBytes: _maxImageSizeBytes,
+      );
+
+      if (pickedImage != null) {
+        setState(() {
+          _capturedImage = pickedImage;
+          _existingImageUrl = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        UIHelpers.showSnackBar(
+          context: context,
+          message: e is Exception
+              ? e.toString().replaceFirst('Exception: ', '')
+              : 'خطأ في اختيار الصورة',
+          type: SnackBarType.error,
+        );
+      }
+    }
+  }
+
+  Future<bool> _isLabNumberExists(String labNumber) async {
+    final isEditing = widget.lab != null;
+    if (isEditing && labNumber == widget.lab!.labNumber) {
+      return false;
+    }
+    return await FirebaseDatabaseService.isLabNumberExists(labNumber,
+        excludeId: isEditing ? widget.lab!.id : null);
+  }
 }
 
-// --- ويدجتات محسّنة ومفصولة لتحسين الأداء ---
+// ===========================================================================
+// 6. الويدجتات الفرعية المنفصلة (Separated Sub-Widgets)
+// ===========================================================================
 
-/// ويدجت مخصص لحقول النص لتقليل التكرار وتوحيد الشكل.
 class _CustomTextField extends StatelessWidget {
   final TextEditingController controller;
   final String labelText;
@@ -434,9 +413,6 @@ class _CustomTextField extends StatelessWidget {
   }
 }
 
-//------------------------------------------------------------------------------
-
-/// ويدجت مخصص لقائمة حالة المعمل لعرضها بشكل منظم.
 class _LabStatusDropdown extends StatelessWidget {
   final LabStatus initialValue;
   final ValueChanged<LabStatus?> onChanged;
@@ -483,9 +459,6 @@ class _LabStatusDropdown extends StatelessWidget {
   }
 }
 
-//------------------------------------------------------------------------------
-
-/// ويدجت مخصص لقائمة الكليات.
 class _CollegeDropdown extends StatelessWidget {
   final String? selectedValue;
   final ValueChanged<String?> onChanged;
@@ -511,9 +484,6 @@ class _CollegeDropdown extends StatelessWidget {
   }
 }
 
-//------------------------------------------------------------------------------
-
-/// ويدجت مخصص لقائمة الأقسام التي تعتمد على الكلية المختارة.
 class _DepartmentDropdown extends StatelessWidget {
   final String? college;
   final String? selectedValue;
@@ -551,9 +521,6 @@ class _DepartmentDropdown extends StatelessWidget {
   }
 }
 
-//------------------------------------------------------------------------------
-
-/// ويدجت مخصص لقائمة الأدوار.
 class _FloorDropdown extends StatelessWidget {
   final String? selectedValue;
   final ValueChanged<String?> onChanged;
@@ -578,9 +545,6 @@ class _FloorDropdown extends StatelessWidget {
   }
 }
 
-//------------------------------------------------------------------------------
-
-/// ويدجت مخصص لقائمة أنواع المعامل (أو الأماكن).
 class _LabTypeDropdown extends StatelessWidget {
   final String? selectedValue;
   final ValueChanged<String?> onChanged;
@@ -605,9 +569,6 @@ class _LabTypeDropdown extends StatelessWidget {
   }
 }
 
-//------------------------------------------------------------------------------
-
-/// ويدجت مسؤول عن عرض الصورة الملتقطة أو الموجودة وزر التقاط الصورة.
 class _ImageCaptureSection extends StatelessWidget {
   final File? capturedImage;
   final String? existingImageUrl;
@@ -658,9 +619,7 @@ class _ImageCaptureSection extends StatelessWidget {
   }
 }
 
-//------------------------------------------------------------------------------
-
-/// ويدجت مسؤول عن عرض الأزرار السفلية بناءً على سياق الشاشة (إضافة أو تعديل).
+/// *** [تم التحديث] *** ويدجت مسؤول عن عرض الأزرار السفلية مع استخدام الثيم.
 class _ActionButtons extends StatelessWidget {
   final bool isEditing;
   final LabStatus labStatus;
@@ -698,6 +657,8 @@ class _ActionButtons extends StatelessWidget {
                 icon: const Icon(Icons.add_to_queue),
                 label: const Text('إضافة جهاز'),
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.secondary,
+                  foregroundColor: theme.colorScheme.onSecondary,
                   minimumSize: const Size(double.infinity, 50),
                 ),
               ),
@@ -720,6 +681,8 @@ class _ActionButtons extends StatelessWidget {
             ElevatedButton(
               onPressed: onSaveAndAddDevice,
               style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  foregroundColor: theme.colorScheme.onSecondaryContainer,
                   minimumSize: const Size(double.infinity, 50)),
               child: const Text('إضافة معمل مع الجهاز'),
             ),

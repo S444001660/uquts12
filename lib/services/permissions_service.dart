@@ -1,89 +1,85 @@
-// services/permissions_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // لاستخدام debugPrint
-import '../models/user_account_model.dart'; // استيراد نموذج المستخدم
-import '../models/user_role_model.dart'; // <--- استيراد الملف الجديد
+import '../models/user_account_model.dart';
+import '../models/user_role_model.dart';
 
-// تم نقل تعريف UserRole إلى user_role_model.dart
-// enum UserRole { admin, supervisor, technician }
-
+/// كلاس خدمي لإدارة صلاحيات المستخدمين والوصول إلى بياناتهم بكفاءة.
+/// يستخدم التخزين المؤقت (Caching) لتقليل عدد مرات القراءة من قاعدة البيانات.
 class PermissionsService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// جلب معلومات المستخدم الحالي مع دورهم من Firestore.
+  // --- [تمت الإضافة] --- متغيرات للتخزين المؤقت (Caching)
+  static UserAccountModel? _currentUser;
+  static UserRole? _currentUserRole;
+
+  /// --- [تم التحديث] --- دالة لمسح الذاكرة المؤقتة عند تسجيل الخروج.
+  static void clearCache() {
+    _currentUser = null;
+    _currentUserRole = null;
+    debugPrint('PermissionsService: Cache has been cleared.');
+  }
+
+  /// --- [تم التحديث] --- دالة لجلب معلومات المستخدم الحالي الكاملة (من الذاكرة المؤقتة أو Firestore).
   static Future<UserAccountModel?> getCurrentUserInfo() async {
-    final user = _auth.currentUser;
-    if (user == null) {
+    // إذا كانت البيانات موجودة في الذاكرة المؤقتة، أرجعها مباشرة.
+    if (_currentUser != null) {
+      debugPrint('PermissionsService: Returning cached user info.');
+      return _currentUser;
+    }
+
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) {
       debugPrint('PermissionsService: No current user logged in.');
       return null;
     }
 
-    debugPrint('PermissionsService: Current user UID: ${user.uid}');
-
     try {
       debugPrint(
-          'PermissionsService: Attempting to fetch user document from Firestore: users/${user.uid}');
-      final doc = await _firestore.collection('users').doc(user.uid).get();
-
+          'PermissionsService: Fetching user document from Firestore for UID: ${firebaseUser.uid}');
+      final doc =
+          await _firestore.collection('users').doc(firebaseUser.uid).get();
       if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        debugPrint('PermissionsService: User document found. Data: $data');
-        // تأكد أن البيانات الأساسية موجودة في المستند
-        if (data['uid'] == null ||
-            data['email'] == null ||
-            data['fullName'] == null ||
-            data['role'] == null) {
-          debugPrint(
-              'PermissionsService: User document found but missing essential fields.');
-          return null; // ارجع null إذا كانت الحقول الأساسية مفقودة
-        }
-        return UserAccountModel.fromMap(data);
+        // قم بتخزين البيانات في الذاكرة المؤقتة قبل إرجاعها.
+        _currentUser = UserAccountModel.fromMap(doc.data()!);
+        debugPrint('PermissionsService: User info fetched and cached.');
+        return _currentUser;
       } else {
         debugPrint(
-            'PermissionsService: User document NOT found for UID: ${user.uid}');
+            'PermissionsService: User document NOT found for UID: ${firebaseUser.uid}');
         return null;
       }
     } catch (e) {
-      debugPrint(
-          'PermissionsService: Error fetching user info from Firestore: $e');
+      debugPrint("Error fetching user info: $e");
       return null;
     }
   }
 
-  /// جلب الدور الحالي للمستخدم
-  static Future<UserRole?> getCurrentUserRole() async {
-    final user = _auth.currentUser;
-    if (user == null) return null;
-
-    // الأدمن الرئيسي له صلاحيات كاملة دائماً
-    if (user.email == 'admin@uqu.edu.sa') {
-      return UserRole.admin;
+  /// --- [تم التحديث] --- دالة لجلب دور (Role) المستخدم الحالي.
+  static Future<UserRole> getCurrentUserRole() async {
+    // إذا كان الدور موجودًا في الذاكرة المؤقتة، أرجعه مباشرة.
+    if (_currentUserRole != null) {
+      debugPrint('PermissionsService: Returning cached user role.');
+      return _currentUserRole!;
     }
 
-    final userInfo = await getCurrentUserInfo(); // جلب أحدث معلومات المستخدم
-    final roleString =
-        userInfo?.role; // استخدام حقل الدور من نموذج UserAccountModel
-
-    // تحويل السلسلة النصية للدور إلى قيمة من تعداد UserRole
-    switch (roleString) {
-      case 'admin':
-        return UserRole.admin;
-      case 'supervisor':
-        return UserRole.supervisor;
-      case 'technician':
-        return UserRole.technician;
-      default:
-        return UserRole
-            .guest; // دور افتراضي للمستخدمين غير المعروفين أو بدون دور
+    final user =
+        await getCurrentUserInfo(); // ستستخدم هذه الدالة الذاكرة المؤقتة إذا أمكن
+    if (user != null) {
+      // قم بتخزين الدور في الذاكرة المؤقتة.
+      _currentUserRole = userRoleFromString(user.role);
+      debugPrint(
+          'PermissionsService: User role fetched and cached: ${_currentUserRole?.name}');
+      return _currentUserRole!;
     }
+
+    return UserRole.guest; // القيمة الافتراضية في حالة عدم وجود مستخدم
   }
 
-  /// التحقق من صلاحية معينة للدور الحالي
+  /// دالة للتحقق مما إذا كان المستخدم الحالي يمتلك صلاحية معينة.
   static Future<bool> hasPermission(String permission) async {
     final role = await getCurrentUserRole();
-    if (role == null) return false;
 
     switch (role) {
       case UserRole.admin:
@@ -92,14 +88,13 @@ class PermissionsService {
         return _supervisorPermissions.contains(permission);
       case UserRole.technician:
         return _technicianPermissions.contains(permission);
-      case UserRole.guest: // الضيوف ليس لديهم أي صلاحيات خاصة
+      case UserRole.guest:
         return _guestPermissions.contains(permission);
     }
   }
 
   // --- قوائم الصلاحيات لكل دور ---
 
-  // الأدمن: كل الصلاحيات
   static const List<String> _adminPermissions = [
     'delete_lab',
     'manage_users',
@@ -112,7 +107,6 @@ class PermissionsService {
     'edit_lab',
   ];
 
-  // المشرف (مساعد الأدمن): نفس صلاحيات الأدمن
   static const List<String> _supervisorPermissions = [
     'delete_lab',
     'manage_users',
@@ -125,19 +119,13 @@ class PermissionsService {
     'edit_lab',
   ];
 
-  // الفني: صلاحيات محدودة
   static const List<String> _technicianPermissions = [
-    'add_device', 'edit_device', 'add_lab',
-    'edit_lab', // يمكنه التعديل ولكن ليس الحذف
+    'add_device',
+    'edit_device',
+    'add_lab',
+    'edit_lab',
     'view_my_tasks',
   ];
 
-  // الضيوف: لا توجد صلاحيات خاصة (يمكن إضافة 'view_public_data' مثلاً)
   static const List<String> _guestPermissions = [];
-
-  /// دالة لمسح الذاكرة المؤقتة (لم تعد ذات أهمية كبيرة هنا بسبب StreamBuilder في AuthWrapper)
-  static void clearCache() {
-    debugPrint(
-        'PermissionsService: clearCache called (no internal cache to clear).');
-  }
 }

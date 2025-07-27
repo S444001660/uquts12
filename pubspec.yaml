@@ -66,6 +66,8 @@ dependencies:
   # --- أدوات مساعدة (Utils) ---
   share_plus: ^7.2.2
   shared_preferences: ^2.2.2
+  equatable: ^2.0.5 
+  intl: 0.20.2
 
 #------------------------------------------------------------------------------
 provider: 
@@ -74,7 +76,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
-  equatable: ^2.0.5 # أو أحدث إصدار
 
 #------------------------------------------------------------------------------
 
