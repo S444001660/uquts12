@@ -11,6 +11,8 @@ import 'firebase_options.dart';
 // استيراد الشاشة التي سيبدأ منها التطبيق
 import 'package:uquts1/auth/auth_wrapper.dart';
 
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 //------------------------------------------------------------------------------
 
 // ===========================================================================
@@ -65,6 +67,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'نظام إدارة المعامل',
       debugShowCheckedModeBanner: false,
+      
 
       // --- إعدادات التعريب واللغة العربية ---
       locale: const Locale('ar', 'SA'),
@@ -76,6 +79,8 @@ class MyApp extends StatelessWidget {
       supportedLocales: const [
         Locale('ar', 'SA'),
       ],
+      
+      navigatorObservers: [routeObserver],
 
       // --- تخصيص الثيم (Theme) ---
       theme: baseTheme.copyWith(

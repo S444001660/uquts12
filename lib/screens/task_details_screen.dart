@@ -139,59 +139,93 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
   /// دالة لإكمال المهمة وتحديث البيانات في قاعدة البيانات.
   Future<void> completeTask() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() => isLoading = true);
-
     try {
-      final proofUrl = await uploadProofImage(widget.taskId, widget.userTaskId);
-      final note = noteController.text;
+      // جلب نوع المهمة
+      final taskType = taskData?['type'] ?? '';
+
+      // شرط منع الإكمال إذا كانت المهمة من نوع تسجيل أجهزة وبدون تقدم
+      if (_realtimeProgress == 0 && taskType == 'deviceRegistration') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('لا يمكنك إنهاء المهمة دون تسجيل أي تقدم')),
+        );
+        return;
+      }
+
+      setState(() => isLoading = true);
 
       final batch = FirebaseFirestore.instance.batch();
 
       final userTaskRef = FirebaseFirestore.instance
           .collection('user_tasks')
           .doc(widget.userTaskId);
-      batch.update(userTaskRef, {
-        'isCompleted': true,
-        'completedAt': Timestamp.now(),
-        'proofImages': proofUrl != null ? [proofUrl] : [],
-        'completionNote': note,
-        'progress': _realtimeProgress,
-      });
 
       final taskRef =
           FirebaseFirestore.instance.collection('tasks').doc(widget.taskId);
+
+      // رفع صورة الإثبات (إن وُجدت)
+      final proofUrl = await uploadProofImage(widget.taskId, widget.userTaskId);
+
+      // تحديث user_tasks
+      batch.update(userTaskRef, {
+        'isCompleted': true,
+        'completedAt': Timestamp.now(),
+        'completionNote': noteController.text.trim(),
+        'proofImages': proofUrl != null ? [proofUrl] : [],
+        'progress': _realtimeProgress,
+      });
+
+      // تحديث progress في وثيقة المهمة
       batch.update(taskRef, {
         'currentCount': FieldValue.increment(_realtimeProgress),
       });
 
-      final userRef =
-          FirebaseFirestore.instance.collection('users').doc(user.uid);
-      batch.update(userRef, {
-        'points': FieldValue.increment(3),
-        'tasksCompleted': FieldValue.increment(1),
-      });
-
       await batch.commit();
 
+      // التحقق من اكتمال جميع الفنيين
+      final userTasksSnap = await FirebaseFirestore.instance
+          .collection('user_tasks')
+          .where('taskId', isEqualTo: widget.taskId)
+          .get();
+
+      final allCompleted =
+          userTasksSnap.docs.every((doc) => doc['isCompleted'] == true);
+
+      if (allCompleted) {
+        await taskRef.update({
+          'isCompleted': true,
+          'completedAt': Timestamp.now(),
+        });
+      }
+
+      // ✅ زيادة النقاط
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId != null) {
+        final userRef =
+            FirebaseFirestore.instance.collection('users').doc(currentUserId);
+
+        await FirebaseFirestore.instance.runTransaction((transaction) async {
+          final userSnap = await transaction.get(userRef);
+          final currentPoints = userSnap['points'] ?? 0;
+          final currentTasks = userSnap['tasksCompleted'] ?? 0;
+
+          transaction.update(userRef, {
+            'points': currentPoints + 3,
+            'tasksCompleted': currentTasks + 1,
+          });
+        });
+      }
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('تم إكمال المهمة بنجاح'),
-              backgroundColor: Colors.green),
-        );
         Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم إكمال المهمة بنجاح')),
+        );
       }
     } catch (e) {
-      if (mounted) {
-        UIHelpers.showErrorSnackBar(context, 'فشل إكمال المهمة: $e');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: $e')),
+      );
+      setState(() => isLoading = false);
     }
   }
 

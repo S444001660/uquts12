@@ -22,32 +22,24 @@ class PermissionsService {
   }
 
   /// --- [تم التحديث] --- دالة لجلب معلومات المستخدم الحالي الكاملة (من الذاكرة المؤقتة أو Firestore).
-  static Future<UserAccountModel?> getCurrentUserInfo() async {
-    // إذا كانت البيانات موجودة في الذاكرة المؤقتة، أرجعها مباشرة.
-    if (_currentUser != null) {
+  static Future<UserAccountModel?> getCurrentUserInfo(
+      {bool forceRefresh = false}) async {
+    if (!forceRefresh && _currentUser != null) {
       debugPrint('PermissionsService: Returning cached user info.');
       return _currentUser;
     }
 
     final firebaseUser = _auth.currentUser;
-    if (firebaseUser == null) {
-      debugPrint('PermissionsService: No current user logged in.');
-      return null;
-    }
+    if (firebaseUser == null) return null;
 
     try {
-      debugPrint(
-          'PermissionsService: Fetching user document from Firestore for UID: ${firebaseUser.uid}');
       final doc =
           await _firestore.collection('users').doc(firebaseUser.uid).get();
       if (doc.exists) {
-        // قم بتخزين البيانات في الذاكرة المؤقتة قبل إرجاعها.
         _currentUser = UserAccountModel.fromMap(doc.data()!);
         debugPrint('PermissionsService: User info fetched and cached.');
         return _currentUser;
       } else {
-        debugPrint(
-            'PermissionsService: User document NOT found for UID: ${firebaseUser.uid}');
         return null;
       }
     } catch (e) {

@@ -55,12 +55,23 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   // ===========================================================================
 
   @override
+  @override
   void initState() {
     super.initState();
+
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
+
+    // ✅ إعادة التحميل عند الرجوع من صفحات أخرى
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ModalRoute.of(context)?.addScopedWillPopCallback(() async {
+        _loadUserAndData();
+        return true;
+      });
+    });
+
     _loadUserAndData();
   }
 
@@ -118,7 +129,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     });
 
     try {
-      _currentUser = await PermissionsService.getCurrentUserInfo();
+      _currentUser = await PermissionsService.getCurrentUserInfo(forceRefresh: true);
       _currentUserRole = await PermissionsService.getCurrentUserRole();
 
       await Future.wait([
