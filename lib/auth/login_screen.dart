@@ -87,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
           final newAdminUser = UserAccountModel(
             uid: firebaseUser.uid,
             email: email,
-            fullName: 'مدير النظام',
+            fullName: 'رئيس القسم',
             role: UserRole.admin.name,
             createdAt: DateTime.now(),
             points: 0,
@@ -95,11 +95,11 @@ class _LoginScreenState extends State<LoginScreen> {
             devicesRegistered: 0,
           );
           await userDocRef.set(newAdminUser.toMap());
-          debugPrint("✅ تم إنشاء مستند المدير الأول في Firestore تلقائيًا.");
+          debugPrint("✅ تم إنشاء مستند الرئيس الأول في Firestore تلقائيًا.");
           if (mounted) {
             if (mounted) {
               UIHelpers.showSuccessSnackBar(
-                  context, "تم تسجيل الدخول كمدير النظام.");
+                  context, "تم تسجيل الدخول رئيس القسم.");
             }
           }
         } else {

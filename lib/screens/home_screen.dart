@@ -367,10 +367,8 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       buttons.addAll([
         _HomeButton(Icons.assignment_add, 'إسناد مهمة',
             () => _navigateAndReload(const ImprovedAddTaskScreen())),
-        _HomeButton(Icons.admin_panel_settings_outlined, 'شؤون الموظفين',
-            () => _navigateAndReload(const EmployeeManagementScreen())),
-        _HomeButton(Icons.analytics_outlined, 'التقارير',
-            () => _navigateAndReload(const ReportsScreen())),
+        _HomeButton(Icons.history, 'سجل المهام',
+            () => _navigateAndReload(const AdminTasksHistoryScreen())),
       ]);
     }
 

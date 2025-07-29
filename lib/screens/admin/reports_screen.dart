@@ -30,9 +30,9 @@ class _ReportsScreenState extends State<ReportsScreen>
   // Controllers and filters
   late TabController _tabController;
   String _selectedTimeFilter = 'month';
-  final TextEditingController _employeeSearchController = TextEditingController();
+  final TextEditingController _employeeSearchController =
+      TextEditingController();
   String _selectedRoleFilter = 'all';
-
 
   // Pre-fetched data to avoid multiple reads
   List<QueryDocumentSnapshot>? _deviceDocs;
@@ -82,7 +82,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'نظرة عامة'),
             Tab(icon: Icon(Icons.bar_chart), text: 'الرسوم البيانية'),
-            Tab(icon: Icon(Icons.people), text: 'أفضل الموظفين'),
+            Tab(icon: Icon(Icons.people), text: 'أفضل الفنيين'),
             Tab(icon: Icon(Icons.history), text: 'النشاطات الأخيرة'),
           ],
         ),
@@ -144,9 +144,8 @@ class _ReportsScreenState extends State<ReportsScreen>
         _labDocs = results[1].docs;
         _userDocs = results[2].docs;
       }
-      
-      _processAllStats();
 
+      _processAllStats();
     } catch (e) {
       if (mounted) {
         setState(() => _error = 'خطأ في تحميل البيانات: $e');
@@ -324,28 +323,18 @@ class _ReportsScreenState extends State<ReportsScreen>
               TextField(
                 controller: _employeeSearchController,
                 decoration: InputDecoration(
-                  hintText: 'بحث بالاسم، البريد، أو الرقم الوظيفي...',
+                  hintText: 'بحث بالاسم، البريد، أو رقم الفني...',
                   prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildRoleFilterChip('الكل', 'all'),
-                  const SizedBox(width: 8),
-                  _buildRoleFilterChip('فني', 'technician'),
-                  const SizedBox(width: 8),
-                  _buildRoleFilterChip('مشرف', 'supervisor'),
-                ],
               ),
             ],
           ),
         ),
         Expanded(
           child: displayedEmployees.isEmpty
-              ? const Center(child: Text('لا يوجد موظفون يطابقون البحث.'))
+              ? const Center(child: Text('لا يوجد فنيون يطابقون البحث.'))
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: displayedEmployees.length,
@@ -361,7 +350,8 @@ class _ReportsScreenState extends State<ReportsScreen>
                           child: Text(
                             '$rank',
                             style: const TextStyle(
-                                color: Colors.white, fontWeight: FontWeight.bold),
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
                           ),
                         ),
                         title: Text(employee['fullName'] ?? 'غير محدد'),
@@ -390,8 +380,11 @@ class _ReportsScreenState extends State<ReportsScreen>
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: activity['type'] == 'lab' ? Colors.green : Colors.blue,
-              child: Icon(activity['type'] == 'lab' ? Icons.science : Icons.computer, color: Colors.white),
+              backgroundColor:
+                  activity['type'] == 'lab' ? Colors.green : Colors.blue,
+              child: Icon(
+                  activity['type'] == 'lab' ? Icons.science : Icons.computer,
+                  color: Colors.white),
             ),
             title: Text(activity['description'] ?? ''),
             subtitle: Text('الكلية: ${activity['college'] ?? ''}'),
@@ -464,7 +457,7 @@ class _ReportsScreenState extends State<ReportsScreen>
 
   void _processLabsByStatus(List<QueryDocumentSnapshot> labs) {
     final Map<String, int> statusCount = {
-      'مفتوح مع أجهزة': 0,
+      'مفتوح': 0,
       'يوجد مشكلة': 0,
       'مغلق': 0,
     };
@@ -473,8 +466,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       final status = data['status'] as String? ?? 'closed';
       switch (status) {
         case 'openWithDevices':
-          statusCount['مفتوح مع أجهزة'] =
-              (statusCount['مفتوح مع أجهزة'] ?? 0) + 1;
+          statusCount['مفتوح'] = (statusCount['مفتوح'] ?? 0) + 1;
           break;
         case 'openNoDevices':
           statusCount['يوجد مشكلة'] = (statusCount['يوجد مشكلة'] ?? 0) + 1;
@@ -499,8 +491,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       for (final doc in devices) {
         final data = doc.data() as Map<String, dynamic>;
         final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-        if (createdAt != null &&
-            now.difference(createdAt).inDays < 7) {
+        if (createdAt != null && now.difference(createdAt).inDays < 7) {
           final dayName = _getDayName(createdAt.weekday);
           timeData[dayName] = (timeData[dayName] ?? 0) + 1;
         }
@@ -513,8 +504,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       for (final doc in devices) {
         final data = doc.data() as Map<String, dynamic>;
         final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-        if (createdAt != null &&
-            now.difference(createdAt).inDays < 365) {
+        if (createdAt != null && now.difference(createdAt).inDays < 365) {
           final monthName = _getMonthName(createdAt.month);
           timeData[monthName] = (timeData[monthName] ?? 0) + 1;
         }
@@ -534,14 +524,16 @@ class _ReportsScreenState extends State<ReportsScreen>
     }
     _devicesByTimePeriod = timeData;
   }
-  
+
   void _processTopEmployees(List<QueryDocumentSnapshot> users) {
-    final employeeData = users.map((doc) => doc.data() as Map<String, dynamic>).toList();
+    final employeeData =
+        users.map((doc) => doc.data() as Map<String, dynamic>).toList();
     employeeData.sort((a, b) => (b['points'] ?? 0).compareTo(a['points'] ?? 0));
     _topEmployees = employeeData;
   }
 
-  void _processRecentActivities(List<QueryDocumentSnapshot> devices, List<QueryDocumentSnapshot> labs) {
+  void _processRecentActivities(
+      List<QueryDocumentSnapshot> devices, List<QueryDocumentSnapshot> labs) {
     List<Map<String, dynamic>> activities = [];
 
     for (var doc in devices) {
@@ -595,8 +587,8 @@ class _ReportsScreenState extends State<ReportsScreen>
           email.contains(query) ||
           employeeId.contains(query);
 
-      final matchesRole =
-          _selectedRoleFilter == 'all' || employee['role'] == _selectedRoleFilter;
+      final matchesRole = _selectedRoleFilter == 'all' ||
+          employee['role'] == _selectedRoleFilter;
 
       return matchesSearch && matchesRole;
     }).toList();
@@ -644,12 +636,12 @@ class _ReportsScreenState extends State<ReportsScreen>
           });
         }
       },
-      selectedColor: Theme.of(context).colorScheme.primary..withAlpha((255 * 0.2).round())
-,
+      selectedColor: Theme.of(context).colorScheme.primary
+        ..withAlpha((255 * 0.2).round()),
       checkmarkColor: Theme.of(context).colorScheme.primary,
     );
   }
-  
+
   Widget _buildRoleFilterChip(String label, String value) {
     final isSelected = _selectedRoleFilter == value;
     return FilterChip(
@@ -662,8 +654,8 @@ class _ReportsScreenState extends State<ReportsScreen>
           });
         }
       },
-      selectedColor: Theme.of(context).colorScheme.primary..withAlpha((255 * 0.2).round())
-,
+      selectedColor: Theme.of(context).colorScheme.primary
+        ..withAlpha((255 * 0.2).round()),
       checkmarkColor: Theme.of(context).colorScheme.primary,
     );
   }
@@ -885,9 +877,9 @@ class _ReportsScreenState extends State<ReportsScreen>
         borderData: FlBorderData(show: true),
         barGroups: barGroups,
         maxY: (_labsByStatus.values.isNotEmpty
-                ? _labsByStatus.values.reduce((a, b) => a > b ? a : b)
-                : 0)
-            .toDouble() +
+                    ? _labsByStatus.values.reduce((a, b) => a > b ? a : b)
+                    : 0)
+                .toDouble() +
             2,
       ),
     );
@@ -914,16 +906,32 @@ class _ReportsScreenState extends State<ReportsScreen>
   String _getMonthName(int month) {
     final correctedMonth = (month - 1).abs() % 12;
     const months = [
-      'ينا', 'فبر', 'مار', 'أبر', 'ماي', 'يون',
-      'يول', 'أغس', 'سبت', 'أكت', 'نوف', 'ديس'
+      'ينا',
+      'فبر',
+      'مار',
+      'أبر',
+      'ماي',
+      'يون',
+      'يول',
+      'أغس',
+      'سبت',
+      'أكت',
+      'نوف',
+      'ديس'
     ];
     return months[correctedMonth];
   }
 
   Color _getCollegeColor(String college) {
     final colors = [
-      Colors.blue, Colors.green, Colors.orange, Colors.purple,
-      Colors.red, Colors.teal, Colors.amber, Colors.indigo
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.red,
+      Colors.teal,
+      Colors.amber,
+      Colors.indigo
     ];
     final index = _devicesByCollege.keys.toList().indexOf(college);
     return colors[index % colors.length];
@@ -931,7 +939,7 @@ class _ReportsScreenState extends State<ReportsScreen>
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'مفتوح مع أجهزة':
+      case 'مفتوح':
         return Colors.green;
       case 'يوجد مشكلة':
         return Colors.orange;

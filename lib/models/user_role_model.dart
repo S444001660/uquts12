@@ -16,7 +16,7 @@ extension UserRoleExtension on UserRole {
   String get displayName {
     switch (this) {
       case UserRole.admin:
-        return 'مدير النظام';
+        return 'رئيس القسم';
       case UserRole.supervisor:
         return 'مشرف';
       case UserRole.technician:

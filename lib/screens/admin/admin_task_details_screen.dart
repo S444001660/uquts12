@@ -50,9 +50,8 @@ class AdminTaskDetailsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
           // --- قسم الموظفين المسند إليهم ---
-          Text('الموظفون المسند إليهم', style: theme.textTheme.titleLarge),
+          Text('الفنيين المسند إليهم', style: theme.textTheme.titleLarge),
           const SizedBox(height: 8),
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -65,7 +64,7 @@ class AdminTaskDetailsScreen extends StatelessWidget {
               }
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Center(
-                    child: Text('لم يتم إسناد هذه المهمة لأي موظف.'));
+                    child: Text('لم يتم إسناد هذه المهمة لأي فني.'));
               }
 
               return ListView.builder(
@@ -85,8 +84,9 @@ class AdminTaskDetailsScreen extends StatelessWidget {
                       if (nameSnapshot.connectionState ==
                           ConnectionState.waiting) {
                         return const ListTile(
-                            title: Text('جاري تحميل اسم الموظف...'));
+                            title: Text('جاري تحميل اسم الفني...'));
                       }
+
                       final userName = nameSnapshot.data ?? 'غير معروف';
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 4),

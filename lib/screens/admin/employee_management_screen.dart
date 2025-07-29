@@ -57,7 +57,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('شؤون الموظفين'),
+        title: const Text('إدارة الحسابات'),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
         bottom: TabBar(
@@ -66,7 +66,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
-            Tab(icon: Icon(Icons.people), text: ' الموظفين'),
+            Tab(icon: Icon(Icons.people), text: ' الفنيين'),
             Tab(icon: Icon(Icons.analytics), text: 'الإحصائيات'),
           ],
         ),
@@ -122,7 +122,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showErrorSnackBar('خطأ في تحميل قائمة الموظفين: $e');
+        _showErrorSnackBar('خطأ في تحميل قائمة الفنيين: $e');
       }
     }
   }
@@ -135,10 +135,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           .update({'isActive': !isActive});
 
       _showSuccessSnackBar(
-          isActive ? 'تم إلغاء تفعيل الموظف' : 'تم تفعيل الموظف');
+          isActive ? 'تم إلغاء تفعيل الفني' : 'تم تفعيل الفني');
       _loadEmployees();
     } catch (e) {
-      _showErrorSnackBar('خطأ في تحديث حالة الموظف: $e');
+      _showErrorSnackBar('خطأ في تحديث حالة الفني: $e');
     }
   }
 
@@ -158,7 +158,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
               TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: 'البحث بالاسم, الايميل, أو الرقم الوظيفي...',
+                  hintText: 'البحث بالاسم, الايميل, أو رقم الفني...',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
@@ -202,7 +202,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : filteredList.isEmpty
-                  ? const Center(child: Text('لا يوجد موظفون يطابقون البحث'))
+                  ? const Center(child: Text('لا يوجد فنيون يطابقون البحث'))
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: filteredList.length,
@@ -241,9 +241,9 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       child: ListView(
         children: [
           _buildStatCard(
-              'إجمالي الموظفين', totalEmployees.toString(), Icons.people),
+              'إجمالي الفنين', totalEmployees.toString(), Icons.people),
           _buildStatCard(
-              'الموظفين النشطين', activeEmployees.toString(), Icons.person),
+              'الفنين النشطين', activeEmployees.toString(), Icons.person),
           _buildStatCard(
               'إجمالي النقاط المكتسبة', totalPoints.toString(), Icons.star),
           _buildStatCard('إجمالي المهام المكتملة', completedTasks.toString(),
@@ -297,7 +297,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('${employee['email'] ?? 'غير محدد'}'),
-              Text('رقم الموظف: ${employee['employeeId'] ?? 'غير محدد'}'),
+              Text('رقم الفني: ${employee['employeeId'] ?? 'غير محدد'}'),
               Text('الدور: ${_getRoleDisplayName(employee['role'])}'),
               Text(
                 'النقاط: ${employee['points'] ?? 0}',
@@ -364,7 +364,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('ليس لديك صلاحية للوصول إلى إدارة الموظفين'),
+          content: Text('ليس لديك صلاحية للوصول إلى إدارة الحسابات'),
           backgroundColor: Colors.red,
         ),
       );

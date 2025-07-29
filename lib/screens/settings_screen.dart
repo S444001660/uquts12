@@ -150,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         _buildSettingsCard(
           icon: Icons.admin_panel_settings,
-          title: 'إدارة الموظفين',
+          title: 'إدارة الحسابات',
           onTap: () => Navigator.push(
               context,
               MaterialPageRoute(

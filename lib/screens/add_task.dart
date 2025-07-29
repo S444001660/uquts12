@@ -55,8 +55,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     if (!_formKey.currentState!.validate() || _assignedTechnicians.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('يرجى تعبئة جميع الحقول واختيار موظف واحد على الأقل')),
+            content: Text('يرجى تعبئة جميع الحقول واختيار فني واحد على الأقل')),
       );
       return;
     }
@@ -236,7 +235,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                   const SizedBox(height: 8),
                   TextFormField(
                     decoration: const InputDecoration(
-                      labelText: 'بحث عن موظف بالاسم أو الرقم الوظيفي',
+                      labelText: 'بحث عن الفني بالاسم أو رقم الفني',
                       prefixIcon: Icon(Icons.search),
                       border: OutlineInputBorder(),
                     ),
@@ -256,7 +255,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                         // --- الإضافة الجديدة: مربع تحديد الكل ---
                         if (filteredUsers.isNotEmpty)
                           CheckboxListTile(
-                            title: const Text('تحديد كل الموظفين الظاهرين',
+                            title: const Text('تحديد كل الفنيين الظاهرين',
                                 style: TextStyle(fontWeight: FontWeight.bold)),
                             value: allFilteredSelected,
                             onChanged: (bool? value) {
@@ -286,7 +285,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                               _assignedTechnicians.contains(user['id']);
                           return CheckboxListTile(
                             title: Text(user['fullName']),
-                            subtitle: Text('رقم الموظف: ${user['employeeId']}'),
+                            subtitle: Text('رقم الفني: ${user['employeeId']}'),
                             value: isSelected,
                             onChanged: (val) {
                               setState(() {
