@@ -6,6 +6,7 @@ import '../utils/device_form_constants.dart';
 import '../utils/ui_helpers.dart';
 import 'add_lab_screen.dart';
 import 'lab_details_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 //------------------------------------------------------------------------------
 
@@ -234,7 +235,7 @@ class _LabsListScreenState extends State<LabsListScreen> {
 
   Widget _buildLabsList(ThemeData theme) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CustomLoadingIndicator());
     }
     if (_filteredLabs.isEmpty) {
       return _buildEmptyView(theme);

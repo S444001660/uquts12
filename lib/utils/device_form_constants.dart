@@ -28,7 +28,22 @@ class DeviceFormConstants {
     'اخرى',
   ];
 
-  static final List<String> storageTypes = ['SSD', 'HDD', 'NVME','اخرى',];
+  // --- [تمت الإضافة] --- قائمة بأحجام الرام
+  static final List<String> ramSizes = [
+    '4 GB',
+    '8 GB',
+    '16 GB',
+    '32 GB',
+    '64 GB',
+    'اخرى',
+  ];
+
+  static final List<String> storageTypes = [
+    'SSD',
+    'HDD',
+    'NVME',
+    'اخرى',
+  ];
 
   static final List<String> storageSizes = [
     '128 GB',
@@ -85,8 +100,7 @@ class DeviceFormConstants {
       'قسم التسويق',
       'اخرى',
     ],
-
-    'اخرى':[
+    'اخرى': [
       'اخرى',
     ]
   };

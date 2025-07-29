@@ -1,11 +1,26 @@
+// استيراد المكتبات الضرورية
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart'; // <-- [تمت الإضافة]
 import '../utils/ui_helpers.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
+
+//------------------------------------------------------------------------------
+
+/// --- [تمت الإضافة] --- كلاس مساعد لتنظيم بيانات مواقع الكليات
+class CollegeLocationInfo {
+  final String mapUrl;
+  final String imageAsset;
+
+  const CollegeLocationInfo({required this.mapUrl, required this.imageAsset});
+}
+
+//------------------------------------------------------------------------------
 
 class TaskDetailsScreen extends StatefulWidget {
   final String taskId;
@@ -33,12 +48,35 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   bool isLoading = true;
   String? _error;
 
-  // --- متغيرات جديدة لتتبع التقدم التلقائي ---
   int _realtimeProgress = 0;
   bool _isGoalMet = false;
 
+  /// --- [تمت الإضافة] --- خريطة تحتوي على روابط الخرائط ومسارات الصور لكل كلية.
+  final Map<String, CollegeLocationInfo> _collegeLocationData = {
+    'كلية الهندسة': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7',
+      imageAsset: 'assets/images/college_engineering.jpg',
+    ),
+    'كلية الطب': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/mSET1C88At97o6s46',
+      imageAsset: 'assets/images/college_medicine.jpg',
+    ),
+    'كلية الحاسب الآلي': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/yfHBYYpfLaoWu1qd8',
+      imageAsset: 'assets/images/college_computer.jpg',
+    ),
+    'كلية العلوم': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/iVGvJTV6e1Vquxqt6',
+      imageAsset: 'assets/images/college_science.jpg',
+    ),
+    'كلية الإدارة والاقتصاد': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/7ysTpqfdpZPPQTAn8',
+      imageAsset: 'assets/images/college_management.jpg',
+    ),
+  };
+
   // ===========================================================================
-  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
   // ===========================================================================
 
   @override
@@ -54,7 +92,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   // ===========================================================================
-  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
   // ===========================================================================
 
   @override
@@ -62,7 +100,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('تفاصيل المهمة')),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : _error != null
               ? Center(
                   child: Padding(
@@ -93,10 +131,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   // ===========================================================================
-  // 4. منطق العمل الرئيسي (Core Business Logic) - (أساسي)
+  // 4. منطق العمل الرئيسي (Core Business Logic)
   // ===========================================================================
 
-  /// دالة لجلب بيانات المهمة الرئيسية والمهمة الفرعية للمستخدم.
   Future<void> fetchData() async {
     setState(() {
       isLoading = true;
@@ -125,7 +162,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         });
       }
     } catch (e, s) {
-      // --- تم التعديل هنا لإضافة طباعة الخطأ ---
       debugPrint('Error fetching task details: $e');
       debugPrint('Stack trace: $s');
       if (mounted) {
@@ -137,13 +173,10 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     }
   }
 
-  /// دالة لإكمال المهمة وتحديث البيانات في قاعدة البيانات.
   Future<void> completeTask() async {
     try {
-      // جلب نوع المهمة
       final taskType = taskData?['type'] ?? '';
 
-      // شرط منع الإكمال إذا كانت المهمة من نوع تسجيل أجهزة وبدون تقدم
       if (_realtimeProgress == 0 && taskType == 'deviceRegistration') {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('لا يمكنك إنهاء المهمة دون تسجيل أي تقدم')),
@@ -154,18 +187,14 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       setState(() => isLoading = true);
 
       final batch = FirebaseFirestore.instance.batch();
-
       final userTaskRef = FirebaseFirestore.instance
           .collection('user_tasks')
           .doc(widget.userTaskId);
-
       final taskRef =
           FirebaseFirestore.instance.collection('tasks').doc(widget.taskId);
 
-      // رفع صورة الإثبات (إن وُجدت)
       final proofUrl = await uploadProofImage(widget.taskId, widget.userTaskId);
 
-      // تحديث user_tasks
       batch.update(userTaskRef, {
         'isCompleted': true,
         'completedAt': Timestamp.now(),
@@ -174,14 +203,12 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         'progress': _realtimeProgress,
       });
 
-      // تحديث progress في وثيقة المهمة
       batch.update(taskRef, {
         'currentCount': FieldValue.increment(_realtimeProgress),
       });
 
       await batch.commit();
 
-      // التحقق من اكتمال جميع الفنيين
       final userTasksSnap = await FirebaseFirestore.instance
           .collection('user_tasks')
           .where('taskId', isEqualTo: widget.taskId)
@@ -197,7 +224,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         });
       }
 
-      // ✅ زيادة النقاط
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       if (currentUserId != null) {
         final userRef =
@@ -230,9 +256,10 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   // ===========================================================================
-  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets) - (يمكن فصلها)
+  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets)
   // ===========================================================================
 
+  /// *** [تم التحديث] *** بناء الواجهة الرئيسية مع إضافة بطاقة الموقع.
   Widget _buildTaskDetailsView() {
     if (taskData == null || userTaskData == null) {
       return const Center(child: Text('البيانات غير متوفرة.'));
@@ -246,6 +273,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildTaskInfoCard(),
+          const SizedBox(height: 16),
+          // --- [الإضافة الجديدة] --- عرض بطاقة الموقع
+          _buildLocationCard(Theme.of(context)),
           const SizedBox(height: 16),
           if (taskData!['type'] == 'deviceRegistration') ...[
             _buildProgressCard(),
@@ -281,6 +311,50 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         ),
       ),
     );
+  }
+
+  /// --- [ويدجت جديد] --- لعرض بطاقة الموقع التفاعلية.
+  Widget _buildLocationCard(ThemeData theme) {
+    final collegeName = taskData?['college'] as String?;
+    if (collegeName == null) return const SizedBox.shrink();
+
+    final collegeInfo = _collegeLocationData[collegeName];
+
+    if (collegeInfo != null) {
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 4,
+        child: InkWell(
+          onTap: () => _openLocationInMaps(collegeInfo.mapUrl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Image.asset(
+                collegeInfo.imageAsset,
+                height: 180,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox(
+                    height: 180,
+                    child: Center(child: Icon(Icons.broken_image)),
+                  );
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Text(
+                  'عرض موقع $collegeName في الخرائط',
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildProgressCard() {
@@ -450,7 +524,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   // ===========================================================================
-  // 6. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // 6. الدوال المساعدة (Helper Functions)
   // ===========================================================================
 
   Future<void> _calculateRealtimeProgress() async {
@@ -520,5 +594,26 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         ],
       ),
     );
+  }
+
+  /// --- [دالة جديدة] --- لفتح رابط الموقع في تطبيق الخرائط.
+  Future<void> _openLocationInMaps(String locationUrl) async {
+    if (locationUrl.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('موقع الكلية غير متوفر')),
+        );
+      }
+      return;
+    }
+
+    final Uri url = Uri.parse(locationUrl);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر فتح تطبيق الخرائط')),
+        );
+      }
+    }
   }
 }

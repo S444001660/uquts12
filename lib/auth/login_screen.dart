@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/ui_helpers.dart';
 import '../models/user_account_model.dart';
 import '../models/user_role_model.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -212,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 40),
                 _isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CustomLoadingIndicator())
                     : ElevatedButton(
                         onPressed: _signIn,
                         style: ElevatedButton.styleFrom(

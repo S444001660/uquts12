@@ -1,13 +1,25 @@
+// استيراد المكتبات الضرورية
 import 'package:flutter/material.dart';
-import '../services/permissions_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/device_model.dart';
 import '../models/lab_model.dart';
 import '../services/firebase_database_service.dart';
+import '../services/permissions_service.dart';
 import 'add_device_screen.dart';
 import 'add_lab_screen.dart';
 import '../utils/ui_helpers.dart';
 import 'view_device_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
+
+//------------------------------------------------------------------------------
+
+/// كلاس مساعد لتنظيم بيانات مواقع الكليات
+class CollegeLocationInfo {
+  final String mapUrl;
+  final String imageAsset;
+
+  const CollegeLocationInfo({required this.mapUrl, required this.imageAsset});
+}
 
 //------------------------------------------------------------------------------
 
@@ -35,16 +47,33 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
   List<DeviceModel> _devices = [];
   bool _canDelete = false;
 
-  final Map<String, String> _collegeLocations = {
-    'كلية الهندسة': 'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7',
-    'كلية الطب': 'https://maps.app.goo.gl/mSET1C88At97o6s46',
-    'كلية الحاسب الآلي': 'https://maps.app.goo.gl/yfHBYYpfLaoWu1qd8',
-    'كلية العلوم': 'https://maps.app.goo.gl/iVGvJTV6e1Vquxqt6',
-    'كلية الإدارة والاقتصاد': 'https://maps.app.goo.gl/7ysTpqfdpZPPQTAn8',
+  /// --- [تم التحديث] ---
+  /// خريطة جديدة تحتوي على روابط الخرائط ومسارات الصور لكل كلية.
+  final Map<String, CollegeLocationInfo> _collegeLocationData = {
+    'كلية الهندسة': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7',
+      imageAsset: 'assets/images/college_engineering.jpg',
+    ),
+    'كلية الطب': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/mSET1C88At97o6s46',
+      imageAsset: 'assets/images/college_medicine.jpg',
+    ),
+    'كلية الحاسب الآلي': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/yfHBYYpfLaoWu1qd8',
+      imageAsset: 'assets/images/college_computer.jpg',
+    ),
+    'كلية العلوم': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/iVGvJTV6e1Vquxqt6',
+      imageAsset: 'assets/images/college_science.jpg',
+    ),
+    'كلية الإدارة والاقتصاد': const CollegeLocationInfo(
+      mapUrl: 'https://maps.app.goo.gl/7ysTpqfdpZPPQTAn8',
+      imageAsset: 'assets/images/college_management.jpg',
+    ),
   };
 
   // ===========================================================================
-  // 2. دورة حياة الويدجت (Widget Lifecycle) - (أساسي)
+  // 2. دورة حياة الويدجت (Widget Lifecycle)
   // ===========================================================================
 
   @override
@@ -55,7 +84,7 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
   }
 
   // ===========================================================================
-  // 3. دالة بناء واجهة المستخدم (UI Build Method) - (أساسي)
+  // 3. دالة بناء واجهة المستخدم (UI Build Method)
   // ===========================================================================
 
   @override
@@ -96,232 +125,13 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // عرض الصورة
-              if (_currentLab.imagePath != null &&
-                  _currentLab.imagePath!.startsWith('http'))
-                GestureDetector(
-                  onTap: () {
-                    UIHelpers.showImageDialog(
-                      context: context,
-                      imageUrl: _currentLab.imagePath!,
-                    );
-                  },
-                  child: Container(
-                    height: 250,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.colorScheme.primary),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        _currentLab.imagePath!,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Center(
-                            child: Icon(Icons.broken_image,
-                                size: 50, color: theme.colorScheme.error),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.image_not_supported,
-                            color: theme.colorScheme.primary),
-                        const SizedBox(width: 16),
-                        Text('لم يتم إضافة صورة للمعمل',
-                            style: theme.textTheme.bodyLarge),
-                      ],
-                    ),
-                  ),
-                ),
+              _buildLabImage(theme),
               const SizedBox(height: 16),
-
-              // بطاقة معلومات المعمل
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('معلومات المعمل', style: theme.textTheme.titleLarge),
-                      const SizedBox(height: 16),
-                      _buildDetailRow(
-                          icon: Icons.numbers,
-                          label: 'رقم المعمل',
-                          value: _currentLab.labNumber),
-                      const SizedBox(height: 8),
-                      _buildDetailRow(
-                          icon: Icons.school_outlined,
-                          label: 'الكلية',
-                          value: _currentLab.college),
-                      const SizedBox(height: 8),
-                      _buildDetailRow(
-                          icon: Icons.account_tree_outlined,
-                          label: 'القسم',
-                          value: _currentLab.department),
-                      const SizedBox(height: 8),
-                      _buildDetailRow(
-                          icon: Icons.layers_outlined,
-                          label: 'الدور',
-                          value: _currentLab.floorNumber),
-                      const SizedBox(height: 8),
-                      _buildDetailRow(
-                        icon: _currentLab.status.icon,
-                        label: 'الحالة',
-                        value: _currentLab.status.displayName,
-                        color: _currentLab.status.color,
-                      ),
-                      const SizedBox(height: 8),
-                      if (_currentLab.notes.isNotEmpty)
-                        _buildDetailRow(
-                            icon: Icons.notes_outlined,
-                            label: 'ملاحظات',
-                            value: _currentLab.notes),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        onPressed: _openLocationInMaps,
-                        icon: const Icon(Icons.map_outlined),
-                        label: const Text('فتح الموقع في Google Maps'),
-                        style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 50)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildLabInfoCard(theme),
               const SizedBox(height: 16),
-
-              // بطاقة قائمة الأجهزة
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('الأجهزة', style: theme.textTheme.titleLarge),
-                          if (_currentLab.status != LabStatus.closed)
-                            IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        AddDeviceScreen(labId: _currentLab.id),
-                                  ),
-                                ).then((_) => _loadDevices());
-                              },
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      if (_currentLab.status != LabStatus.closed)
-                        _isLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : _devices.isEmpty
-                                ? Center(
-                                    child: Column(
-                                      children: [
-                                        Icon(Icons.computer_outlined,
-                                            size: 64,
-                                            color: theme.colorScheme.primary
-                                                .withAlpha(128)),
-                                        const SizedBox(height: 16),
-                                        Text('لا توجد أجهزة مسجلة',
-                                            style: theme.textTheme.titleMedium),
-                                      ],
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: _devices.length,
-                                    itemBuilder: (context, index) {
-                                      final device = _devices[index];
-                                      return Card(
-                                        margin:
-                                            const EdgeInsets.only(bottom: 8),
-                                        child: ListTile(
-                                          leading: device.imagePath != null &&
-                                                  device.imagePath!
-                                                      .startsWith('http')
-                                              ? CircleAvatar(
-                                                  backgroundImage: NetworkImage(
-                                                      device.imagePath!),
-                                                )
-                                              : const CircleAvatar(
-                                                  child: Icon(Icons.computer),
-                                                ),
-                                          title: Text(device.name),
-                                          subtitle: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(device.model),
-                                              Text(device.serialNumber),
-                                            ],
-                                          ),
-                                          trailing: Icon(
-                                            device.needsMaintenance
-                                                ? Icons.build_circle
-                                                : Icons.check_circle,
-                                            color: device.needsMaintenance
-                                                ? Colors.orange
-                                                : Colors.green,
-                                          ),
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      ViewDeviceScreen(
-                                                          device: device)),
-                                            ).then((_) => _loadDevices());
-                                          },
-                                        ),
-                                      );
-                                    },
-                                  )
-                      else
-                        Center(
-                          child: Column(
-                            children: [
-                              Icon(Icons.lock_outlined,
-                                  size: 64,
-                                  color:
-                                      theme.colorScheme.error.withAlpha(128)),
-                              const SizedBox(height: 16),
-                              Text('المعمل مغلق',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                      color: theme.colorScheme.error)),
-                              Text('لا يمكن إضافة أو عرض الأجهزة',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.error
-                                          .withAlpha(179))),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildLocationCard(theme), // <-- تم استبدال الزر بالبطاقة الجديدة
+              const SizedBox(height: 16),
+              _buildDevicesCard(theme),
             ],
           ),
         ),
@@ -330,17 +140,15 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
   }
 
   // ===========================================================================
-  // 5. الدوال المساعدة (Helper Functions) - (يمكن فصلها)
+  // 4. منطق العمل الرئيسي (Core Business Logic)
   // ===========================================================================
 
-  /// دالة لتهيئة الشاشة بالكامل (صلاحيات وتفاصيل وأجهزة).
   Future<void> _initializeScreen() async {
     await _checkPermissions();
     await _loadLabDetails();
     await _loadDevices();
   }
 
-  /// التحقق من صلاحيات المستخدم (مثل صلاحية الحذف).
   Future<void> _checkPermissions() async {
     final canDelete = await PermissionsService.hasPermission('delete_lab');
     if (mounted) {
@@ -350,7 +158,6 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     }
   }
 
-  /// تحميل/تحديث تفاصيل المعمل الحالية من قاعدة البيانات.
   Future<void> _loadLabDetails() async {
     try {
       final updatedLab =
@@ -365,7 +172,6 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     }
   }
 
-  /// تحميل قائمة الأجهزة الخاصة بهذا المعمل.
   Future<void> _loadDevices() async {
     try {
       if (mounted) setState(() => _isLoading = true);
@@ -386,11 +192,17 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     }
   }
 
-  /// فتح رابط الموقع في تطبيق الخرائط الخارجي.
+  /// --- [تم التحديث] --- فتح رابط الموقع بناءً على المنطق الجديد
   Future<void> _openLocationInMaps() async {
-    final locationUrl = _currentLab.locationUrl ??
-        _collegeLocations[_currentLab.college] ??
-        'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7';
+    final collegeInfo = _collegeLocationData[_currentLab.college];
+    final locationUrl = _currentLab.locationUrl ?? collegeInfo?.mapUrl;
+
+    if (locationUrl == null || locationUrl.isEmpty) {
+      if (mounted) {
+        UIHelpers.showErrorSnackBar(context, 'موقع المعمل غير متوفر');
+      }
+      return;
+    }
 
     final Uri url = Uri.parse(locationUrl);
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -400,7 +212,6 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     }
   }
 
-  /// حذف المعمل بعد تأكيد المستخدم.
   Future<void> _deleteLab() async {
     final confirm = await UIHelpers.showConfirmationDialog(
       context: context,
@@ -416,7 +227,7 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
         setState(() => _isLoading = true);
         await FirebaseDatabaseService.deleteLab(_currentLab.id);
         if (mounted) {
-          Navigator.pop(context, true); // إرجاع true للإشارة إلى حدوث تغيير
+          Navigator.pop(context, true);
           UIHelpers.showSuccessSnackBar(context, 'تم حذف المعمل بنجاح');
         }
       } catch (e) {
@@ -431,7 +242,281 @@ class _LabDetailsScreenState extends State<LabDetailsScreen> {
     }
   }
 
-  /// ويدجت مساعد لبناء صف تفاصيل (أيقونة، عنوان، قيمة).
+  // ===========================================================================
+  // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets)
+  // ===========================================================================
+
+  Widget _buildLabImage(ThemeData theme) {
+    if (_currentLab.imagePath != null &&
+        _currentLab.imagePath!.startsWith('http')) {
+      return GestureDetector(
+        onTap: () {
+          UIHelpers.showImageDialog(
+            context: context,
+            imageUrl: _currentLab.imagePath!,
+          );
+        },
+        child: Container(
+          height: 250,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.colorScheme.primary),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              _currentLab.imagePath!,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return const Center(child: CustomLoadingIndicator());
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Center(
+                  child: Icon(Icons.broken_image,
+                      size: 50, color: theme.colorScheme.error),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    } else {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.image_not_supported, color: theme.colorScheme.primary),
+              const SizedBox(width: 16),
+              Text('لم يتم إضافة صورة للمعمل',
+                  style: theme.textTheme.bodyLarge),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  /// *** [تم التحديث] *** إضافة حقل "نوع المكان".
+  Widget _buildLabInfoCard(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('معلومات المعمل', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 16),
+            _buildDetailRow(
+                icon: Icons.numbers,
+                label: 'رقم المعمل',
+                value: _currentLab.labNumber),
+            const SizedBox(height: 8),
+            _buildDetailRow(
+                icon: Icons.school_outlined,
+                label: 'الكلية',
+                value: _currentLab.college),
+            const SizedBox(height: 8),
+            _buildDetailRow(
+                icon: Icons.account_tree_outlined,
+                label: 'القسم',
+                value: _currentLab.department),
+            const SizedBox(height: 8),
+            _buildDetailRow(
+                icon: Icons.layers_outlined,
+                label: 'الدور',
+                value: _currentLab.floorNumber),
+            const SizedBox(height: 8),
+            // --- [الإضافة الجديدة هنا] ---
+            _buildDetailRow(
+                icon: Icons.category_outlined,
+                label: 'نوع المكان',
+                value: _currentLab.type),
+            const SizedBox(height: 8),
+            // --- [نهاية الإضافة] ---
+            _buildDetailRow(
+              icon: _currentLab.status.icon,
+              label: 'الحالة',
+              value: _currentLab.status.displayName,
+              color: _currentLab.status.color,
+            ),
+            const SizedBox(height: 8),
+            if (_currentLab.notes.isNotEmpty)
+              _buildDetailRow(
+                  icon: Icons.notes_outlined,
+                  label: 'ملاحظات',
+                  value: _currentLab.notes),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// --- [ويدجت جديد] --- لعرض بطاقة الموقع التفاعلية.
+  Widget _buildLocationCard(ThemeData theme) {
+    if (_currentLab.locationUrl != null &&
+        _currentLab.locationUrl!.isNotEmpty) {
+      return ElevatedButton.icon(
+        onPressed: _openLocationInMaps,
+        icon: const Icon(Icons.map_outlined),
+        label: const Text('فتح موقع المعمل المحدد في الخرائط'),
+        style: ElevatedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 50)),
+      );
+    }
+
+    final collegeInfo = _collegeLocationData[_currentLab.college];
+    if (collegeInfo != null) {
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 4,
+        child: InkWell(
+          onTap: _openLocationInMaps,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Image.asset(
+                collegeInfo.imageAsset,
+                height: 180,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox(
+                    height: 180,
+                    child: Center(child: Icon(Icons.broken_image)),
+                  );
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Text(
+                  'عرض موقع ${_currentLab.college} في الخرائط',
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildDevicesCard(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('الأجهزة', style: theme.textTheme.titleLarge),
+                if (_currentLab.status != LabStatus.closed)
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              AddDeviceScreen(labId: _currentLab.id),
+                        ),
+                      ).then((_) => _loadDevices());
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_currentLab.status != LabStatus.closed)
+              _isLoading
+                  ? const Center(child: CustomLoadingIndicator())
+                  : _devices.isEmpty
+                      ? Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.computer_outlined,
+                                  size: 64,
+                                  color:
+                                      theme.colorScheme.primary.withAlpha(128)),
+                              const SizedBox(height: 16),
+                              Text('لا توجد أجهزة مسجلة',
+                                  style: theme.textTheme.titleMedium),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _devices.length,
+                          itemBuilder: (context, index) {
+                            final device = _devices[index];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                leading: device.imagePath != null &&
+                                        device.imagePath!.startsWith('http')
+                                    ? CircleAvatar(
+                                        backgroundImage:
+                                            NetworkImage(device.imagePath!),
+                                      )
+                                    : const CircleAvatar(
+                                        child: Icon(Icons.computer),
+                                      ),
+                                title: Text(device.name),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(device.model),
+                                    Text(device.serialNumber),
+                                  ],
+                                ),
+                                trailing: Icon(
+                                  device.needsMaintenance
+                                      ? Icons.build_circle
+                                      : Icons.check_circle,
+                                  color: device.needsMaintenance
+                                      ? Colors.orange
+                                      : Colors.green,
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (context) =>
+                                            ViewDeviceScreen(device: device)),
+                                  ).then((_) => _loadDevices());
+                                },
+                              ),
+                            );
+                          },
+                        )
+            else
+              Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.lock_outlined,
+                        size: 64,
+                        color: theme.colorScheme.error.withAlpha(128)),
+                    const SizedBox(height: 16),
+                    Text('المعمل مغلق',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(color: theme.colorScheme.error)),
+                    Text('لا يمكن إضافة أو عرض الأجهزة',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error.withAlpha(179))),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDetailRow(
       {required IconData icon,
       required String label,

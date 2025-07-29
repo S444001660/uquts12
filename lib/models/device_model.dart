@@ -6,7 +6,6 @@ import 'package:equatable/equatable.dart';
 /// نموذج بيانات (Data Model) يمثل "الجهاز" داخل النظام.
 /// يرث من Equatable لضمان المقارنة الصحيحة بين الكائنات.
 class DeviceModel extends Equatable {
-  // <-- 2. جعله يرث من Equatable
   // --- الخصائص الأساسية للجهاز ---
   final String id;
   final String name;
@@ -15,6 +14,7 @@ class DeviceModel extends Equatable {
   final String model;
   final String serialNumber;
   final String processor;
+  final String? ramSize; // <-- 1. تمت الإضافة هنا
   final String storageType;
   final String storageSize;
 
@@ -36,7 +36,7 @@ class DeviceModel extends Equatable {
   final DateTime updatedAt;
   final String? imagePath;
   final String? createdBy;
-  final String? createdByName; // <-- 3. إضافة الحقل الجديد لتحسين الأداء
+  final String? createdByName;
 
   //------------------------------------------------------------------------------
 
@@ -48,6 +48,7 @@ class DeviceModel extends Equatable {
     required this.model,
     required this.serialNumber,
     required this.processor,
+    this.ramSize, // <-- 2. تمت الإضافة هنا
     required this.storageType,
     required this.storageSize,
     this.hasExtraStorage = false,
@@ -65,13 +66,11 @@ class DeviceModel extends Equatable {
     required this.updatedAt,
     this.imagePath,
     this.createdBy,
-    this.createdByName, // <-- 4. إضافته للبناء
+    this.createdByName,
   });
 
   //------------------------------------------------------------------------------
 
-  /// *** [مهم] *** تحديد الخصائص التي سيتم استخدامها للمقارنة بين كائنين.
-  /// هنا، نعتبر أن جهازين متساويين إذا كان لهما نفس الـ id.
   @override
   List<Object?> get props => [id];
 
@@ -86,6 +85,7 @@ class DeviceModel extends Equatable {
       'model': model,
       'serialNumber': serialNumber,
       'processor': processor,
+      'ramSize': ramSize, // <-- 3. تمت الإضافة هنا
       'storageType': storageType,
       'storageSize': storageSize,
       'hasExtraStorage': hasExtraStorage,
@@ -103,7 +103,7 @@ class DeviceModel extends Equatable {
       'updatedAt': Timestamp.fromDate(updatedAt),
       'imagePath': imagePath,
       'createdBy': createdBy,
-      'createdByName': createdByName, // <-- 5. إضافته للخريطة
+      'createdByName': createdByName,
     };
   }
 
@@ -125,6 +125,7 @@ class DeviceModel extends Equatable {
       model: map['model'] ?? '',
       serialNumber: map['serialNumber'] ?? '',
       processor: map['processor'] ?? '',
+      ramSize: map['ramSize'], // <-- 4. تمت الإضافة هنا
       storageType: map['storageType'] ?? '',
       storageSize: map['storageSize'] ?? '',
       hasExtraStorage: map['hasExtraStorage'] ?? false,
@@ -142,7 +143,7 @@ class DeviceModel extends Equatable {
       updatedAt: parseDateTime(map['updatedAt']),
       imagePath: map['imagePath'],
       createdBy: map['createdBy'],
-      createdByName: map['createdByName'], // <-- 6. إضافته هنا
+      createdByName: map['createdByName'],
     );
   }
 
@@ -156,6 +157,7 @@ class DeviceModel extends Equatable {
     String? model,
     String? serialNumber,
     String? processor,
+    String? ramSize, // <-- 5. تمت الإضافة هنا
     String? storageType,
     String? storageSize,
     bool? hasExtraStorage,
@@ -173,7 +175,7 @@ class DeviceModel extends Equatable {
     DateTime? updatedAt,
     String? imagePath,
     String? createdBy,
-    String? createdByName, // <-- 7. إضافته هنا
+    String? createdByName,
   }) {
     return DeviceModel(
       id: id ?? this.id,
@@ -183,6 +185,7 @@ class DeviceModel extends Equatable {
       model: model ?? this.model,
       serialNumber: serialNumber ?? this.serialNumber,
       processor: processor ?? this.processor,
+      ramSize: ramSize ?? this.ramSize, // <-- 6. تمت الإضافة هنا
       storageType: storageType ?? this.storageType,
       storageSize: storageSize ?? this.storageSize,
       hasExtraStorage: hasExtraStorage ?? this.hasExtraStorage,
@@ -200,7 +203,7 @@ class DeviceModel extends Equatable {
       updatedAt: updatedAt ?? this.updatedAt,
       imagePath: imagePath ?? this.imagePath,
       createdBy: createdBy ?? this.createdBy,
-      createdByName: createdByName ?? this.createdByName, // <-- 8. إضافته هنا
+      createdByName: createdByName ?? this.createdByName,
     );
   }
 }

@@ -10,6 +10,7 @@ import 'package:uquts1/screens/user_tasks_screen.dart';
 import '../auth/auth_wrapper.dart';
 import 'admin/create_user_screen.dart'; // <-- أصبح هذا الاستيراد مستخدمًا الآن
 import '../services/permissions_service.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -100,7 +101,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// ويدجت لبناء محتوى الشاشة بناءً على الحالة (تحميل، خطأ، نجاح).
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CustomLoadingIndicator());
     }
     if (_error != null) {
       return Center(

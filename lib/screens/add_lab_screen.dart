@@ -13,6 +13,7 @@ import '../utils/validation_utils.dart';
 import '../utils/image_utils.dart';
 import '../utils/device_form_constants.dart';
 import 'add_device_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 // -----------------------------------------------------------------
 
@@ -223,7 +224,7 @@ class _AddLabScreenState extends State<AddLabScreen> {
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CustomLoadingIndicator())
             : Form(
                 key: _formKey,
                 child: ListView(

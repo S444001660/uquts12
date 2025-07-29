@@ -5,6 +5,7 @@ import '../utils/device_form_constants.dart';
 import '../utils/ui_helpers.dart';
 import 'add_device_screen.dart';
 import 'view_device_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 //------------------------------------------------------------------------------
 
@@ -216,7 +217,7 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
 
   Widget _buildDevicesList(ThemeData theme) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CustomLoadingIndicator());
     }
     if (_filteredDevices.isEmpty) {
       return _buildEmptyView(theme);

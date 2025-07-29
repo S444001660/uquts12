@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class CreateUserScreen extends StatefulWidget {
   const CreateUserScreen({super.key});
@@ -51,7 +52,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         title: const Text('إنشاء حساب فني جديد'),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : Form(
               key: _formKey,
               child: ListView(

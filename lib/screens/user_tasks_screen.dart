@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/task_model.dart';
 import '../models/user_task_model.dart' as user_task_model;
 import 'task_details_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class UserTasksScreen extends StatefulWidget {
   const UserTasksScreen({super.key});
@@ -37,7 +38,7 @@ class _UserTasksScreenState extends State<UserTasksScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: CustomLoadingIndicator());
                 }
                 if (snapshot.hasError) {
                   return const Center(child: Text('حدث خطأ في جلب المهام.'));

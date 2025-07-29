@@ -1,10 +1,10 @@
 // استيراد المكتبات الضرورية
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // *** [تمت الإضافة] *** استيراد ضروري
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/device_model.dart';
 import '../models/lab_model.dart';
 import '../services/firebase_database_service.dart';
@@ -14,6 +14,8 @@ import '../utils/validation_utils.dart';
 import '../utils/image_utils.dart';
 import '../utils/device_form_constants.dart';
 import '../services/permissions_service.dart';
+import 'view_device_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 //------------------------------------------------------------------------------
 
@@ -47,6 +49,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   final _notesController = TextEditingController();
   final _modelController = TextEditingController();
   final _processorController = TextEditingController();
+  final _ramSizeController = TextEditingController();
   final _storageTypeController = TextEditingController();
   final _storageSizeController = TextEditingController();
   final _osVersionController = TextEditingController();
@@ -60,6 +63,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   String? _selectedCollege;
   String? _selectedDepartment;
   String? _selectedLab;
+  String? _selectedRamSize;
   bool _needsMaintenance = false;
   bool _hasExtraStorage = false;
   File? _capturedImage;
@@ -88,6 +92,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     _notesController.dispose();
     _modelController.dispose();
     _processorController.dispose();
+    _ramSizeController.dispose();
     _storageTypeController.dispose();
     _storageSizeController.dispose();
     _osVersionController.dispose();
@@ -106,8 +111,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
   Future<DeviceModel?> _performSave() async {
     try {
-      await _validateInputs();
-      if (!mounted) return null;
+      if (!(_formKey.currentState?.validate() ?? false)) {
+        throw 'يرجى التحقق من صحة البيانات المدخلة';
+      }
       setState(() => _isLoading = true);
 
       final String? finalImageUrl = await _handleImageUpload();
@@ -125,7 +131,6 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
             .get();
         currentUserName = userDoc.data()?['fullName'];
       }
-
       final deviceToSave = DeviceModel(
         id: deviceId,
         name: _nameController.text.trim(),
@@ -134,6 +139,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         serialNumber: _serialNumberController.text.trim(),
         model: _modelController.text.trim(),
         processor: _processorController.text.trim(),
+        ramSize: _ramSizeController.text.trim(),
         storageType: _storageTypeController.text.trim(),
         storageSize: _storageSizeController.text.trim(),
         hasExtraStorage: _hasExtraStorage,
@@ -271,7 +277,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CustomLoadingIndicator())
             : _error != null
                 ? Center(
                     child: Column(
@@ -344,6 +350,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     _serialNumberController.text = device.serialNumber;
     _modelController.text = device.model;
     _processorController.text = device.processor;
+    _ramSizeController.text = device.ramSize ?? '';
     _storageTypeController.text = device.storageType;
     _storageSizeController.text = device.storageSize;
     _osVersionController.text = device.osVersion;
@@ -364,6 +371,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       _currentSelectedLabDetails =
           _availableLabs.firstWhere((lab) => lab.id == device.labId);
     }
+    _selectedRamSize = device.ramSize;
   }
 
   void _loadScannedBarcodeData(Map<String, String?> barcodeData) {
@@ -440,7 +448,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       return _needsMaintenance ? _existingImageUrl : null;
     }
     final storagePath =
-        'device_images/${widget.device?.id ?? const Uuid().v4()}';
+        'device_images/${widget.device?.id ?? FirebaseDatabaseService.generateUniqueId()}';
     return await FirebaseDatabaseService.uploadImageToFirebaseStorage(
         _capturedImage!, storagePath);
   }
@@ -452,6 +460,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     _notesController.clear();
     _modelController.clear();
     _processorController.clear();
+    _ramSizeController.clear();
     _storageTypeController.clear();
     _storageSizeController.clear();
     _osVersionController.clear();
@@ -466,6 +475,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       _hasExtraStorage = false;
       _capturedImage = null;
       _existingImageUrl = null;
+      _selectedRamSize = null;
     });
   }
 
@@ -600,7 +610,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                             loadingProgress == null
                                 ? child
                                 : const Center(
-                                    child: CircularProgressIndicator()),
+                                    child: CustomLoadingIndicator()),
                         errorBuilder: (context, error, stackTrace) =>
                             const Center(
                                 child: Icon(Icons.broken_image, size: 50))),
@@ -642,12 +652,23 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         TextFormField(
           controller: _serialNumberController,
           decoration: InputDecoration(
-              labelText: 'الرقم التسلسلي',
+              labelText: 'الرقم التسلسلي (10 أرقام)',
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
           validator: (value) {
             if (_needsMaintenance) return null;
-            return ValidationUtils.validateSerialNumber(value);
+            if (value == null || value.isEmpty) {
+              return 'الرقم التسلسلي مطلوب.';
+            }
+            if (value.length != 10) {
+              return 'يجب أن يتكون الرقم التسلسلي من 10 أرقام.';
+            }
+            return null;
           },
         ),
         const SizedBox(height: 16),
@@ -686,6 +707,28 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
             if (_needsMaintenance) return null;
             return ValidationUtils.validateDropdown(value,
                 errorMessage: 'المعالج مطلوب');
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+              labelText: 'حجم الرام',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          value: _selectedRamSize,
+          items: DeviceFormConstants.ramSizes
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedRamSize = value;
+              _ramSizeController.text = value ?? '';
+            });
+          },
+          validator: (value) {
+            if (_needsMaintenance) return null;
+            return ValidationUtils.validateDropdown(value,
+                errorMessage: 'حجم الرام مطلوب');
           },
         ),
         const SizedBox(height: 16),

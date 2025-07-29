@@ -15,8 +15,6 @@ import 'barcode_scanner_screen.dart';
 import 'settings_screen.dart';
 import 'labs_list_screen.dart';
 import 'devices_list_screen.dart';
-import 'admin/employee_management_screen.dart';
-import 'admin/reports_screen.dart';
 import 'admin/admin_tasks_history_screen.dart';
 import 'admin/admin_task_details_screen.dart';
 import 'add_task.dart';
@@ -25,6 +23,7 @@ import 'task_details_screen.dart';
 import 'lab_details_screen.dart';
 import 'view_device_screen.dart';
 import 'technician_stats_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class UpdatedHomeScreen extends StatefulWidget {
   const UpdatedHomeScreen({super.key});
@@ -55,7 +54,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   // ===========================================================================
 
   @override
-  @override
   void initState() {
     super.initState();
 
@@ -63,15 +61,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
-
-    // ✅ إعادة التحميل عند الرجوع من صفحات أخرى
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ModalRoute.of(context)?.addScopedWillPopCallback(() async {
-        _loadUserAndData();
-        return true;
-      });
-    });
-
     _loadUserAndData();
   }
 
@@ -129,7 +118,8 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     });
 
     try {
-      _currentUser = await PermissionsService.getCurrentUserInfo(forceRefresh: true);
+      _currentUser =
+          await PermissionsService.getCurrentUserInfo(forceRefresh: true);
       _currentUserRole = await PermissionsService.getCurrentUserRole();
 
       await Future.wait([
@@ -180,6 +170,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
   // 5. دوال بناء مكونات الواجهة (UI Builder Methods)
   // ===========================================================================
 
+  /// *** [تم التحديث] *** بناء رأس الصفحة مع عرض شعار الجامعة.
   Widget _buildUserInfoHeader(ThemeData theme) {
     final double topPadding = MediaQuery.of(context).padding.top;
     final userName = _currentUser?.fullName ?? 'مستخدم';
@@ -235,15 +226,22 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
             ),
           ),
           const SizedBox(width: 16),
+          // --- [تم التغيير هنا] --- استبدال النص بالصورة
           CircleAvatar(
             radius: 35,
             backgroundColor: Colors.white,
-            child: Text(
-              userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
+            child: Padding(
+              padding: const EdgeInsets.all(8.0), // هامش داخلي للصورة
+              child: Image.asset(
+                'assets/images/uquLogo.png',
+                // في حالة عدم وجود الصورة، اعرض أيقونة بديلة
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.school,
+                    size: 30,
+                    color: theme.colorScheme.primary,
+                  );
+                },
               ),
             ),
           ),
@@ -288,7 +286,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : _error != null
               ? _buildErrorState(theme, _error!)
               : _recentActivities.isEmpty
@@ -341,7 +339,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
           const Divider(height: 1),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CustomLoadingIndicator())
                 : (_currentUserRole == UserRole.technician
                     ? _buildUserTasksList(theme)
                     : _buildAdminAssignedTasksList(theme)),
@@ -351,7 +349,6 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     );
   }
 
-  /// *** [تم التحديث] *** بناء قسم الإجراءات السريعة باستخدام GridView.
   Widget _buildQuickActions() {
     List<_HomeButton> buttons = [];
 
@@ -387,12 +384,12 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 24.0),
       child: GridView.count(
-        crossAxisCount: 4, // 4 أزرار في كل صف
+        crossAxisCount: 4,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 12, // المسافة الرأسية
-        crossAxisSpacing: 8, // المسافة الأفقية
-        childAspectRatio: 1.0, // نسبة العرض إلى الارتفاع (اجعلها مربعة)
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1.0,
         children: buttons.map((btn) => _buildStyledButton(btn)).toList(),
       ),
     );

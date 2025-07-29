@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_task_details_screen.dart';
+import '../../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class AdminTasksHistoryScreen extends StatefulWidget {
   const AdminTasksHistoryScreen({super.key});
@@ -62,7 +63,7 @@ class _AdminTasksHistoryScreenState extends State<AdminTasksHistoryScreen> {
           _buildSearchBar(),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CustomLoadingIndicator())
                 : _filteredTasks.isEmpty
                     ? const Center(child: Text('لا توجد مهام تطابق البحث.'))
                     : RefreshIndicator(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/permissions_service.dart';
+import '../../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -95,7 +96,7 @@ class _ReportsScreenState extends State<ReportsScreen>
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : _error != null
               ? Center(child: Text(_error!))
               : TabBarView(
@@ -633,24 +634,6 @@ class _ReportsScreenState extends State<ReportsScreen>
           setState(() {
             _selectedTimeFilter = value;
             _processDevicesByTime(_deviceDocs ?? []);
-          });
-        }
-      },
-      selectedColor: Theme.of(context).colorScheme.primary
-        ..withAlpha((255 * 0.2).round()),
-      checkmarkColor: Theme.of(context).colorScheme.primary,
-    );
-  }
-
-  Widget _buildRoleFilterChip(String label, String value) {
-    final isSelected = _selectedRoleFilter == value;
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-        if (selected) {
-          setState(() {
-            _selectedRoleFilter = value;
           });
         }
       },

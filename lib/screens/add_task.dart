@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../utils/device_form_constants.dart'; // <-- [تمت الإضافة] استيراد قائمة الكليات الموحدة
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 // تعريف أنواع المهام لتسهيل التعامل معها
 enum TaskType { inspection, setup, maintenance, deviceRegistration, other }
@@ -28,13 +30,8 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
   int _targetCount = 1;
   String _searchQuery = '';
 
-  final List<String> _colleges = [
-    'كلية الحاسب',
-    'كلية الهندسة',
-    'كلية العلوم',
-    'كلية الطب',
-    'كلية الإدارة والاقتصاد'
-  ];
+  // --- [تم الحذف] --- لم نعد بحاجة لهذه القائمة المكررة
+  // final List<String> _colleges = [ ... ];
 
   // ===========================================================================
   // 2. دورة حياة الويدجت (Widget Lifecycle)
@@ -50,12 +47,12 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
   // 3. منطق العمل الرئيسي (Core Business Logic)
   // ===========================================================================
 
-  /// الدالة الرئيسية لإنشاء المهمة باستخدام WriteBatch لضمان تكامل البيانات.
   Future<void> _createTask() async {
     if (!_formKey.currentState!.validate() || _assignedTechnicians.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('يرجى تعبئة جميع الحقول واختيار فني واحد على الأقل')),
+            content:
+                Text('يرجى تعبئة جميع الحقول واختيار موظف واحد على الأقل')),
       );
       return;
     }
@@ -135,7 +132,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     if (_isLoading && _availableUsers.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: const Text('إسناد مهمة جديدة')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CustomLoadingIndicator()),
       );
     }
 
@@ -146,7 +143,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
       return fullName.contains(query) || employeeId.contains(query);
     }).toList();
 
-    // --- منطق جديد: تحديد حالة مربع "تحديد الكل" ---
     final allFilteredSelected = filteredUsers.isNotEmpty &&
         filteredUsers
             .every((user) => _assignedTechnicians.contains(user['id']));
@@ -161,7 +157,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
               key: _formKey,
               child: ListView(
                 children: [
-                  // ... (بقية حقول الفورم لم تتغير)
                   DropdownButtonFormField<TaskType>(
                     value: _selectedTaskType,
                     items: TaskType.values.map((type) {
@@ -181,9 +176,12 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // --- [تم التحديث] --- استخدام القائمة الموحدة من الثوابت
                   DropdownButtonFormField<String>(
                     value: _selectedCollege,
-                    items: _colleges.map((college) {
+                    // استخدام DeviceFormConstants.colleges مباشرة
+                    items: DeviceFormConstants.colleges.map((college) {
                       return DropdownMenuItem(
                         value: college,
                         child: Text(college),
@@ -199,6 +197,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                         value == null ? 'يرجى اختيار الكلية' : null,
                   ),
                   const SizedBox(height: 16),
+
                   if (_selectedTaskType == TaskType.deviceRegistration)
                     TextFormField(
                       initialValue: _targetCount.toString(),
@@ -235,15 +234,13 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                   const SizedBox(height: 8),
                   TextFormField(
                     decoration: const InputDecoration(
-                      labelText: 'بحث عن الفني بالاسم أو رقم الفني',
+                      labelText: 'بحث عن موظف بالاسم أو رقم الفني',
                       prefixIcon: Icon(Icons.search),
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   ),
                   const SizedBox(height: 8),
-
-                  // --- تعديل: إضافة مربع "تحديد الكل" وقائمة الموظفين ---
                   Container(
                     height: 250,
                     decoration: BoxDecoration(
@@ -252,7 +249,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                     ),
                     child: ListView(
                       children: [
-                        // --- الإضافة الجديدة: مربع تحديد الكل ---
                         if (filteredUsers.isNotEmpty)
                           CheckboxListTile(
                             title: const Text('تحديد كل الفنيين الظاهرين',
@@ -264,13 +260,10 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                                     .map((u) => u['id'] as String)
                                     .toList();
                                 if (value == true) {
-                                  // أضف كل الموظفين المصفاة
                                   _assignedTechnicians.addAll(filteredUserIds);
-                                  // إزالة التكرار لضمان عدم وجود مشاكل
                                   _assignedTechnicians =
                                       _assignedTechnicians.toSet().toList();
                                 } else {
-                                  // إزالة كل الموظفين المصفاة
                                   _assignedTechnicians.removeWhere(
                                       (id) => filteredUserIds.contains(id));
                                 }
@@ -278,8 +271,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                             },
                           ),
                         if (filteredUsers.isNotEmpty) const Divider(height: 1),
-
-                        // قائمة الموظفين الأصلية
                         ...filteredUsers.map((user) {
                           final isSelected =
                               _assignedTechnicians.contains(user['id']);
@@ -297,13 +288,12 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                               });
                             },
                           );
-                        }),
+                        }).toList(),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  // زر الإرسال
                   ElevatedButton.icon(
                     onPressed: _isLoading ? null : _createTask,
                     icon: const Icon(Icons.send),
@@ -319,9 +309,9 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.black.withAlpha(127), // 127 تعادل شفافية 0.5
+              color: Colors.black.withOpacity(0.5),
               child: const Center(
-                child: CircularProgressIndicator(),
+                child: CustomLoadingIndicator(),
               ),
             ),
         ],
@@ -333,7 +323,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
   // 5. الدوال المساعدة (Helper Functions)
   // ===========================================================================
 
-  /// دالة لجلب المستخدمين (الفنيين والمشرفين) من قاعدة البيانات.
   Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
     try {
@@ -368,7 +357,6 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
     }
   }
 
-  /// دالة مساعدة لترجمة نوع المهمة إلى نص عربي.
   String _getTaskTypeDisplayName(TaskType type) {
     switch (type) {
       case TaskType.inspection:

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/permissions_service.dart';
 import 'create_user_screen.dart';
 import 'employee_details_screen.dart';
+import '../../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class EmployeeManagementScreen extends StatefulWidget {
   const EmployeeManagementScreen({super.key});
@@ -200,7 +201,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
         ),
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: CustomLoadingIndicator())
               : filteredList.isEmpty
                   ? const Center(child: Text('لا يوجد فنيون يطابقون البحث'))
                   : ListView.builder(
@@ -220,7 +221,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
   }
 
   Widget _buildStatisticsTab() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_isLoading) return const Center(child: CustomLoadingIndicator());
 
     final totalEmployees = _allEmployees.length;
     final activeEmployees =

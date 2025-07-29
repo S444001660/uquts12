@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/home_screen.dart'; // تأكد من أن اسم الكلاس داخل هذا الملف هو UpdatedHomeScreen
 import '../auth/login_screen.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 /// هذا الويدجت هو المسؤول عن مراقبة حالة تسجيل الدخول للمستخدم وتوجيهه.
 /// يستمع إلى التغييرات في حالة المصادقة (authStateChanges).
@@ -18,7 +19,7 @@ class AuthWrapper extends StatelessWidget {
         // أثناء انتظار بيانات المصادقة، اعرض مؤشر تحميل
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            body: Center(child: CustomLoadingIndicator()),
           );
         }
 
@@ -36,7 +37,7 @@ class AuthWrapper extends StatelessWidget {
               // أثناء انتظار بيانات Firestore، اعرض مؤشر تحميل
               if (userDocSnapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
+                  body: Center(child: CustomLoadingIndicator()),
                 );
               }
 

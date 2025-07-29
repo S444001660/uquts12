@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class AdminTaskDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> task;
@@ -60,7 +61,7 @@ class AdminTaskDetailsScreen extends StatelessWidget {
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: CustomLoadingIndicator());
               }
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Center(

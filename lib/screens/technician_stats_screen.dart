@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/user_account_model.dart';
 import '../utils/ui_helpers.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 class TechnicianStatsScreen extends StatefulWidget {
   final UserAccountModel user;
@@ -60,7 +61,7 @@ class _TechnicianStatsScreenState extends State<TechnicianStatsScreen> {
         elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : RefreshIndicator(
               onRefresh: _fetchStats,
               child: ListView(

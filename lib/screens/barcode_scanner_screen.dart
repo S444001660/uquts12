@@ -10,6 +10,7 @@ import '../screens/view_device_screen.dart';
 import '../screens/add_device_screen.dart';
 import '../utils/ui_helpers.dart';
 import '../utils/barcode_utils.dart';
+import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 //------------------------------------------------------------------------------
 
@@ -93,7 +94,7 @@ class BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : Stack(
               alignment: Alignment.center,
               children: [
