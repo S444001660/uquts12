@@ -33,6 +33,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   String _selectedTimeFilter = 'month';
   final TextEditingController _employeeSearchController =
       TextEditingController();
+  // ignore: prefer_final_fields
   String _selectedRoleFilter = 'all';
 
   // Pre-fetched data to avoid multiple reads

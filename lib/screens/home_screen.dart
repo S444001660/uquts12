@@ -203,7 +203,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
                 Text(
                   userRole,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onPrimary.withOpacity(0.9),
+                    color: theme.colorScheme.onPrimary.withAlpha(230),
                   ),
                 ),
                 if (_currentUser?.points != null) ...[
@@ -255,7 +255,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       height: 48,
       padding: const EdgeInsets.all(5.0),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.1),
+        color: theme.colorScheme.primary.withAlpha(26),
         borderRadius: BorderRadius.circular(12.0),
       ),
       child: TabBar(
@@ -513,7 +513,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       subtitle: Text(_formatTimestamp(activity.timestamp),
           style: theme.textTheme.bodySmall, textAlign: TextAlign.right),
       trailing: CircleAvatar(
-        backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+        backgroundColor: theme.colorScheme.primary.withAlpha(26),
         child: Icon(
           activity.type == 'lab'
               ? Icons.science_outlined
@@ -562,7 +562,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
               const SizedBox(height: 8),
               LinearProgressIndicator(
                 value: progress,
-                backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
+                backgroundColor: theme.colorScheme.primary.withAlpha(51),
                 color: theme.colorScheme.primary,
                 minHeight: 6,
                 borderRadius: BorderRadius.circular(3),
@@ -572,7 +572,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
         ),
       ),
       trailing: CircleAvatar(
-        backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+        backgroundColor: theme.colorScheme.primary.withAlpha(26),
         child: Icon(icon, color: theme.colorScheme.primary),
       ),
       onTap: onTap,
@@ -589,7 +589,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withAlpha(13),
               blurRadius: 5,
               offset: const Offset(0, 2),
             )
@@ -617,7 +617,7 @@ class _UpdatedHomeScreenState extends State<UpdatedHomeScreen>
       elevation: 0,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: theme.colorScheme.error.withOpacity(0.5))),
+          side: BorderSide(color: theme.colorScheme.error.withAlpha(128))),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 16.0),
         child: Column(

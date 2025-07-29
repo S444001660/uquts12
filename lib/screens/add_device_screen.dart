@@ -14,7 +14,6 @@ import '../utils/validation_utils.dart';
 import '../utils/image_utils.dart';
 import '../utils/device_form_constants.dart';
 import '../services/permissions_service.dart';
-import 'view_device_screen.dart';
 import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
 
 //------------------------------------------------------------------------------

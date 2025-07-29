@@ -288,7 +288,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
                               });
                             },
                           );
-                        }).toList(),
+                        }),
                       ],
                     ),
                   ),
@@ -309,7 +309,7 @@ class _ImprovedAddTaskScreenState extends State<ImprovedAddTaskScreen> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withAlpha(128),
               child: const Center(
                 child: CustomLoadingIndicator(),
               ),

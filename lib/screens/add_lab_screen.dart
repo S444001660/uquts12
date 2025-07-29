@@ -95,7 +95,6 @@ class _AddLabScreenState extends State<AddLabScreen> {
     setState(() => _isLoading = true);
 
     final labNumber = _labNumberController.text.trim();
-    final isEditing = widget.lab != null;
 
     try {
       final exists = await _isLabNumberExists(labNumber);

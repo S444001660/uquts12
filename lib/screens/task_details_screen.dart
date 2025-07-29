@@ -6,17 +6,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart'; // <-- [تمت الإضافة]
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/ui_helpers.dart';
-import '../utils/custom_loading_indicator.dart'; // تأكد من أن المسار صحيح
+import '../utils/custom_loading_indicator.dart'; // افترض وجود هذا الويدجت
 
 //------------------------------------------------------------------------------
 
-/// --- [تمت الإضافة] --- كلاس مساعد لتنظيم بيانات مواقع الكليات
 class CollegeLocationInfo {
   final String mapUrl;
   final String imageAsset;
-
   const CollegeLocationInfo({required this.mapUrl, required this.imageAsset});
 }
 
@@ -51,7 +49,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   int _realtimeProgress = 0;
   bool _isGoalMet = false;
 
-  /// --- [تمت الإضافة] --- خريطة تحتوي على روابط الخرائط ومسارات الصور لكل كلية.
   final Map<String, CollegeLocationInfo> _collegeLocationData = {
     'كلية الهندسة': const CollegeLocationInfo(
       mapUrl: 'https://maps.app.goo.gl/4PfbWDc36XAdfRnM7',
@@ -173,13 +170,19 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     }
   }
 
+  /// *** [تم التصحيح] *** دالة لإكمال المهمة مع معالجة آمنة للسياق.
   Future<void> completeTask() async {
+    // تخزين الكائنات التي تعتمد على السياق قبل أي عملية await
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
       final taskType = taskData?['type'] ?? '';
 
       if (_realtimeProgress == 0 && taskType == 'deviceRegistration') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('لا يمكنك إنهاء المهمة دون تسجيل أي تقدم')),
+        messenger.showSnackBar(
+          const SnackBar(
+              content: Text('لا يمكنك إنهاء المهمة دون تسجيل أي تقدم')),
         );
         return;
       }
@@ -228,12 +231,10 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       if (currentUserId != null) {
         final userRef =
             FirebaseFirestore.instance.collection('users').doc(currentUserId);
-
         await FirebaseFirestore.instance.runTransaction((transaction) async {
           final userSnap = await transaction.get(userRef);
           final currentPoints = userSnap['points'] ?? 0;
           final currentTasks = userSnap['tasksCompleted'] ?? 0;
-
           transaction.update(userRef, {
             'points': currentPoints + 3,
             'tasksCompleted': currentTasks + 1,
@@ -242,16 +243,18 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       }
 
       if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم إكمال المهمة بنجاح')),
+        navigator.pop();
+        messenger.showSnackBar(
+          const SnackBar(content: Text('تم إكمال المهمة بنجاح')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ: $e')),
-      );
-      setState(() => isLoading = false);
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('حدث خطأ: $e')),
+        );
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -259,7 +262,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   // 5. دوال بناء مكونات الواجهة المساعدة (UI Helper Widgets)
   // ===========================================================================
 
-  /// *** [تم التحديث] *** بناء الواجهة الرئيسية مع إضافة بطاقة الموقع.
   Widget _buildTaskDetailsView() {
     if (taskData == null || userTaskData == null) {
       return const Center(child: Text('البيانات غير متوفرة.'));
@@ -274,7 +276,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         children: [
           _buildTaskInfoCard(),
           const SizedBox(height: 16),
-          // --- [الإضافة الجديدة] --- عرض بطاقة الموقع
           _buildLocationCard(Theme.of(context)),
           const SizedBox(height: 16),
           if (taskData!['type'] == 'deviceRegistration') ...[
@@ -313,7 +314,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     );
   }
 
-  /// --- [ويدجت جديد] --- لعرض بطاقة الموقع التفاعلية.
   Widget _buildLocationCard(ThemeData theme) {
     final collegeName = taskData?['college'] as String?;
     if (collegeName == null) return const SizedBox.shrink();
@@ -596,7 +596,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     );
   }
 
-  /// --- [دالة جديدة] --- لفتح رابط الموقع في تطبيق الخرائط.
   Future<void> _openLocationInMaps(String locationUrl) async {
     if (locationUrl.isEmpty) {
       if (mounted) {
