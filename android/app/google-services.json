@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "743533051730",
+    "project_id": "uquts-1c23c",
+    "storage_bucket": "uquts-1c23c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:743533051730:android:511ddd05de4761b64bc48b",
+        "android_client_info": {
+          "package_name": "com.example.uquts1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDtt2vOEea7LvAi7wNGoohwBGzmPW92z8Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

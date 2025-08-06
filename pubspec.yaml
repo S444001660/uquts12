@@ -1,0 +1,99 @@
+# --- معلومات المشروع الأساسية ---
+name: uquts1
+description: "تطبيق لإدارة معامل جامعة أم القرى"
+
+# منع النشر العرضي للحزمة على pub.dev.
+publish_to: 'none'
+
+# إصدار التطبيق.
+# version: 1.0.0+1 -> رقم الإصدار + رقم البناء (build number).
+version: 1.0.0+1
+
+#------------------------------------------------------------------------------
+
+# --- بيئة التشغيل ---
+environment:
+  # تحديد إصدارات Dart SDK المتوافقة مع المشروع.
+  sdk: '>=3.0.0 <4.0.0'
+  # تحديد إصدار Flutter المتوافق.
+  flutter: ">=3.16.0"
+
+#------------------------------------------------------------------------------
+
+# --- الاعتماديات (Dependencies) ---
+# الحزم التي يعتمد عليها التطبيق في وضعي التطوير والإنتاج.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Firebase - LATEST STABLE VERSIONS (تم التحديث إلى أحدث الإصدارات المستقرة)
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.19.0
+  cloud_firestore: ^4.17.0
+  firebase_storage: ^11.7.0
+  firebase_app_check: ^0.2.2+1
+  cloud_functions: ^4.7.0
+
+  # --- قاعدة البيانات المحلية (Local Database) ---
+  sqflite: ^2.3.2
+  path: ^1.8.3
+  path_provider: ^2.1.2
+
+  # --- WebView وفتح الروابط ---
+  webview_flutter: ^4.4.2
+  url_launcher: ^6.2.2
+
+  # --- الصور ---
+  image_picker: ^1.0.7
+
+  # --- QR/Barcode ---
+  mobile_scanner: ^3.5.6
+  barcode_widget: ^2.0.4
+  flutter_barcode_scanner:
+    git:
+      url: https://github.com/decodevM/flutter_barcode_scanner.git
+      ref: master
+
+  # --- مكونات واجهة المستخدم (UI Components) ---
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.2.0
+  uuid: ^4.3.3
+  fl_chart: ^0.67.0
+  flutter_image_compress: ^2.2.0
+
+  # --- أدوات مساعدة (Utils) ---
+  share_plus: ^7.2.2
+  shared_preferences: ^2.2.2
+  equatable: ^2.0.5 
+  intl: 0.20.2
+
+#------------------------------------------------------------------------------
+provider: 
+# --- اعتماديات التطوير (Dev Dependencies) ---
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+#------------------------------------------------------------------------------
+
+# --- إعدادات خاصة بـ Flutter ---
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/fonts/
+
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Regular.ttf
+        - asset: assets/fonts/Cairo-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Cairo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Cairo-Bold.ttf
+          weight: 700
